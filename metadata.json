@@ -1,0 +1,6 @@
+{
+  "name": "Verdant Harvest",
+  "description": "A premium grocery store app and administrative portal with category browsing, customized detail views, cart, simulated checkout, order tracking, full metrics dashboards, a dynamic organic recipe book with 1-click buy, and a gamified loyalty rewards hub with coupon coin redemptions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

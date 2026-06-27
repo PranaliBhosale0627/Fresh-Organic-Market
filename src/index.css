@@ -1,0 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Custom palette matching a fresh premium organic grocery aesthetic */
+  --color-primary: #1e3d1a;            /* Rich Pine Forest */
+  --color-primary-container: #2d5a27;  /* Fresh Basil Green */
+  --color-primary-fixed: #e2f0d9;      /* Pastel dew drop */
+  --color-secondary: #c2593f;          /* Earthy Clay/Tomatoes */
+  --color-secondary-container: #faebe6;/* soft flesh blush */
+  --color-tertiary: #b08f26;           /* Golden Wheat Fields */
+  --color-tertiary-fixed: #fcf6e2;     /* Wheat glow */
+  --color-error: #ba1a1a;
+  --color-surface: #fdfdfd;
+  --color-surface-container: #f3f5f2;
+  --color-surface-container-low: #f8faf7;
+  --color-on-surface: #191c18;
+  --color-on-surface-variant: #43493f;
+  --color-outline-variant: #c3c8bc;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-surface-container-low);
+  color: var(--color-on-surface);
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbar to keep layout clean */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
