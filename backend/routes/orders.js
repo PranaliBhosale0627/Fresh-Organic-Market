@@ -42,7 +42,7 @@ router.get('/', asyncHandler(async (req, res) => {
     query.status = new RegExp(`^${status}$`, 'i');
   }
 
-  const orders = await collections().orders.find(query).toArray();
+  const orders = await collections().orders.find(query).sort({ createdAt: -1, date: -1 }).toArray();
   const data = orders.map(withoutMongoId);
   res.json({ success: true, data, count: data.length });
 }));

@@ -76,12 +76,30 @@ export default function App() {
     }
   }, []);
 
+  const loadAdminData = useCallback(async () => {
+    try {
+      const [productsRes, customersRes, ordersRes] = await Promise.all([
+        productsApi.getAll(),
+        customersApi.getAll(),
+        ordersApi.getAll()
+      ]);
+
+      setProducts(productsRes.data);
+      setCustomers(customersRes.data);
+      setOrders(ordersRes.data);
+    } catch (err) {
+      console.error('Failed to load admin data:', err);
+      setNotifications(prev => ['Unable to refresh admin orders. Please confirm admin login.', ...prev].slice(0, 25));
+    }
+  }, []);
+
   // ─── Initial Data Load ────────────────────────────────────────────────────
   const loadAllData = useCallback(async () => {
     setLoading(true);
     try {
       // 1. Verify Authentication Session or allocate a temporary guest token
       let token = authStorage.getToken();
+      let verifiedUser: any = null;
       if (!token) {
         token = `guest_${Math.floor(100000 + Math.random() * 900000)}@harvest.com`;
         authStorage.setToken(token);
@@ -91,6 +109,7 @@ export default function App() {
         try {
           const authRes = await authApi.me();
           if (authRes.success && authRes.user) {
+            verifiedUser = authRes.user;
             setCurrentUser(authRes.user);
             setNotifications(prev => [`🔐 Session verified. Logged in as ${authRes.user.name}`, ...prev]);
             if (authRes.user.isAdmin) {
@@ -111,8 +130,13 @@ export default function App() {
       setProducts(productsRes.data);
       setCustomers(customersRes.data);
 
-      // 3. Load user-specific data (cart, loyalty, orders)
-      await loadUserData();
+      // 3. Load role-specific data. Admin must fetch every order, not only the current user's orders.
+      if (verifiedUser?.isAdmin) {
+        const ordersRes = await ordersApi.getAll();
+        setOrders(ordersRes.data);
+      } else {
+        await loadUserData();
+      }
     } catch (err) {
       console.error('Failed to load data from API:', err);
       // Fallback: import initial data so the UI still renders
@@ -123,11 +147,18 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [loadUserData]);
+  }, [loadAdminData, loadUserData]);
 
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
+
+  useEffect(() => {
+    if (!currentUser?.isAdmin || !isAdminMode) return;
+    if (currentView === 'admin-dashboard' || currentView === 'admin-orders') {
+      loadAdminData();
+    }
+  }, [currentUser?.isAdmin, currentView, isAdminMode, loadAdminData]);
 
   useEffect(() => {
     const email = currentUser?.email || authStorage.getToken();
@@ -190,11 +221,31 @@ export default function App() {
     if (user.isAdmin) {
       setIsAdminMode(true);
       setCurrentView('admin-dashboard');
+      await loadAdminData();
     } else {
       setIsAdminMode(false);
       setCurrentView('home');
+      await loadUserData();
     }
-    // Reload user-specific data (cart, coins, quests) for the logged-in account
+  };
+
+  const handleToggleAdminMode = async (admin: boolean) => {
+    if (admin) {
+      if (!currentUser?.isAdmin) {
+        setIsAdminMode(false);
+        setCurrentView('login');
+        setNotifications(prev => ['Admin access requires the admin account. Please sign in as admin first.', ...prev].slice(0, 25));
+        return;
+      }
+
+      setIsAdminMode(true);
+      setCurrentView('admin-dashboard');
+      await loadAdminData();
+      return;
+    }
+
+    setIsAdminMode(false);
+    setCurrentView('home');
     await loadUserData();
   };
 
@@ -445,14 +496,18 @@ export default function App() {
   };
 
   // ─── Navigation ───────────────────────────────────────────────────────────
-  const handleNavigate = (view: string, category?: string) => {
+  const handleNavigate = async (view: string, category?: string) => {
     // Only intercept admin screens if not logged in as Admin
     if (view.startsWith('admin') && (!currentUser || !currentUser.isAdmin)) {
       setCurrentView('login');
+      setNotifications(prev => ['Admin pages require the admin account. Please sign in as admin@harvest.com.', ...prev].slice(0, 25));
       return;
     }
     setSelectedCategoryFilter(category || 'All Products');
     setCurrentView(view);
+    if (view === 'admin-dashboard' || view === 'admin-orders') {
+      await loadAdminData();
+    }
   };
 
   const handleSelectProduct = (productId: string) => {
@@ -485,7 +540,7 @@ export default function App() {
       {/* Dynamic Header */}
       <Header
         isAdminMode={isAdminMode}
-        onToggleAdminMode={setIsAdminMode}
+        onToggleAdminMode={handleToggleAdminMode}
         onNavigate={handleNavigate}
         cartCount={cartCount}
         currentUser={currentUser}
