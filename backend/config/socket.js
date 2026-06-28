@@ -6,6 +6,10 @@ function userRoom(email) {
   return `user:${email.toLowerCase()}`;
 }
 
+function deliveryPartnerRoom(email) {
+  return `delivery:${email.toLowerCase()}`;
+}
+
 function initializeSocket(server, allowedOrigins = []) {
   ioInstance = new Server(server, {
     cors: {
@@ -29,6 +33,9 @@ function initializeSocket(server, allowedOrigins = []) {
 
     if (email) {
       socket.join(userRoom(email));
+      if (isAdmin === false && socket.handshake.auth?.role === 'delivery_partner') {
+        socket.join(deliveryPartnerRoom(email));
+      }
     }
 
     if (isAdmin) {
@@ -42,6 +49,12 @@ function initializeSocket(server, allowedOrigins = []) {
     socket.on('join-user', (payload = {}) => {
       if (payload.email) {
         socket.join(userRoom(payload.email));
+      }
+    });
+
+    socket.on('join-delivery-partner', (payload = {}) => {
+      if (payload.email) {
+        socket.join(deliveryPartnerRoom(payload.email));
       }
     });
   });
@@ -62,7 +75,13 @@ function emitToUser(email, event, payload) {
   ioInstance?.to(userRoom(email)).emit(event, payload);
 }
 
+function emitToDeliveryPartner(email, event, payload) {
+  if (!email) return;
+  ioInstance?.to(deliveryPartnerRoom(email)).emit(event, payload);
+}
+
 export {
+  emitToDeliveryPartner,
   emitToAdmins,
   emitToUser,
   getSocketServer,

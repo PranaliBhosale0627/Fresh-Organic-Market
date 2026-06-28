@@ -131,3 +131,32 @@ export const loyaltyApi = {
 export const healthApi = {
   check: () => request('/health')
 };
+
+// Delivery Partners
+export const deliveryPartnersApi = {
+  getAll: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/delivery-partners${qs ? `?${qs}` : ''}`);
+  },
+  create: (partner) => request('/delivery-partners', { method: 'POST', body: partner }),
+  update: (id, partner) => request(`/delivery-partners/${id}`, { method: 'PUT', body: partner }),
+  remove: (id) => request(`/delivery-partners/${id}`, { method: 'DELETE' }),
+  analytics: () => request('/delivery-partners/analytics/summary'),
+  assign: (orderId, partnerId, estimatedDeliveryTime) => request('/delivery-partners/assign', {
+    method: 'POST',
+    body: { orderId, partnerId, estimatedDeliveryTime }
+  }),
+  profile: () => request('/delivery-partners/me/profile'),
+  availability: (availability) => request('/delivery-partners/me/availability', { method: 'PUT', body: { availability } }),
+  myOrders: () => request('/delivery-partners/me/orders'),
+  history: () => request('/delivery-partners/me/history'),
+  respond: (orderId, decision) => request(`/delivery-partners/orders/${orderId}/respond`, { method: 'PUT', body: { decision } }),
+  updateDeliveryStatus: (orderId, status, otp) => request(`/delivery-partners/orders/${orderId}/status`, { method: 'PUT', body: { status, otp } })
+};
+
+// Contact Messages
+export const contactApi = {
+  submit: (payload) => request('/contact', { method: 'POST', body: payload }),
+  getAll: () => request('/contact'),
+  updateStatus: (id, status) => request(`/contact/${id}/status`, { method: 'PUT', body: { status } })
+};

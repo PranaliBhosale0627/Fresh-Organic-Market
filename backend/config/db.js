@@ -6,6 +6,7 @@ let database;
 
 const DEFAULT_USER_EMAIL = 'elena.r@example.com';
 const ADMIN_EMAIL = 'admin@harvest.com';
+const DEFAULT_DELIVERY_EMAIL = 'ravi.courier@harvest.com';
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -61,7 +62,9 @@ function collections() {
     wishlists: database.collection('wishlists'),
     loyalties: database.collection('loyalties'),
     accounts: database.collection('accounts'),
-    notifications: database.collection('notifications')
+    notifications: database.collection('notifications'),
+    deliveryPartners: database.collection('deliveryPartners'),
+    contactMessages: database.collection('contactMessages')
   };
 }
 
@@ -79,7 +82,12 @@ async function createIndexes() {
     db.accounts.createIndex({ email: 1 }, { unique: true }),
     db.notifications.createIndex({ recipientEmail: 1, createdAt: -1 }),
     db.notifications.createIndex({ recipientRole: 1, createdAt: -1 }),
-    db.notifications.createIndex({ id: 1 }, { unique: true })
+    db.notifications.createIndex({ id: 1 }, { unique: true }),
+    db.deliveryPartners.createIndex({ id: 1 }, { unique: true }),
+    db.deliveryPartners.createIndex({ email: 1 }, { unique: true }),
+    db.deliveryPartners.createIndex({ status: 1, availability: 1 }),
+    db.contactMessages.createIndex({ id: 1 }, { unique: true }),
+    db.contactMessages.createIndex({ createdAt: -1 })
   ]);
 }
 
@@ -100,25 +108,63 @@ async function seedDatabase() {
 
   await db.accounts.updateOne(
     { email: DEFAULT_USER_EMAIL },
-    { $setOnInsert: { email: DEFAULT_USER_EMAIL, password: 'password123', isAdmin: false } },
+    { $setOnInsert: { email: DEFAULT_USER_EMAIL, password: 'password123', role: 'customer', isAdmin: false } },
     { upsert: true }
   );
 
   await db.accounts.updateOne(
     { email: ADMIN_EMAIL },
-    { $setOnInsert: { email: ADMIN_EMAIL, password: 'admin123', isAdmin: true } },
+    { $setOnInsert: { email: ADMIN_EMAIL, password: 'admin123', role: 'admin', isAdmin: true } },
     { upsert: true }
   );
 
+  await seedDeliveryPartners();
   await ensureUserState(DEFAULT_USER_EMAIL, 185);
   await migrateLegacyOrders();
+}
+
+async function seedDeliveryPartners() {
+  const db = collections();
+  const demoPartner = {
+    id: 'dp-ravi',
+    name: 'Ravi Kumar',
+    email: DEFAULT_DELIVERY_EMAIL,
+    phone: '+1 415 555 0188',
+    avatar: 'RK',
+    vehicleType: 'Electric Scooter',
+    vehicleNumber: 'EV-2048',
+    rating: 4.8,
+    status: 'Active',
+    availability: 'Available',
+    completedDeliveries: 28,
+    activeDeliveries: 0,
+    averageDeliveryTime: 24,
+    joinedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  await db.deliveryPartners.updateOne(
+    { email: DEFAULT_DELIVERY_EMAIL },
+    { $setOnInsert: demoPartner },
+    { upsert: true }
+  );
+
+  await db.accounts.updateOne(
+    { email: DEFAULT_DELIVERY_EMAIL },
+    { $setOnInsert: { email: DEFAULT_DELIVERY_EMAIL, password: 'partner123', role: 'delivery_partner', isAdmin: false } },
+    { upsert: true }
+  );
 }
 
 async function migrateLegacyOrders() {
   const db = collections();
   await Promise.all([
     db.orders.updateMany({ status: 'Processing' }, { $set: { status: 'Packed' } }),
-    db.orders.updateMany({ status: 'Shipped' }, { $set: { status: 'Out for Delivery' } })
+    db.orders.updateMany({ status: 'Shipped' }, { $set: { status: 'Out for Delivery' } }),
+    db.orders.updateMany(
+      { deliveryStatus: { $exists: false } },
+      { $set: { deliveryStatus: 'Unassigned', deliveryHistory: [], assignedPartner: null } }
+    )
   ]);
 }
 
@@ -198,6 +244,7 @@ async function setLoyalty(email, loyalty) {
 export {
   ADMIN_EMAIL,
   DEFAULT_USER_EMAIL,
+  DEFAULT_DELIVERY_EMAIL,
   collections,
   connectToDatabase,
   createDefaultLoyalty,

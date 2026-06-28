@@ -8,6 +8,15 @@ import { notifyAdmins, notifyCustomer } from '../services/notificationService.js
 const router = express.Router();
 const ORDER_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'];
 
+function orderForUser(order, user) {
+  const clean = withoutMongoId(order);
+  delete clean.deliveryOtp;
+  if (clean.customerEmail !== user.email) {
+    delete clean.deliveryOtpCode;
+  }
+  return clean;
+}
+
 function createTimeline(status, timeStr) {
   const stageMap = [
     { stage: 'Order Placed', activeStatuses: ORDER_STATUSES, description: "We've received your order and started preparing." },
@@ -43,7 +52,7 @@ router.get('/', asyncHandler(async (req, res) => {
   }
 
   const orders = await collections().orders.find(query).sort({ createdAt: -1, date: -1 }).toArray();
-  const data = orders.map(withoutMongoId);
+  const data = orders.map((order) => orderForUser(order, req.user));
   res.json({ success: true, data, count: data.length });
 }));
 
@@ -81,7 +90,7 @@ router.get('/:id', asyncHandler(async (req, res, next) => {
     return next(new ApiError('Unauthorized to view this order', 403));
   }
 
-  res.json({ success: true, data: withoutMongoId(order) });
+  res.json({ success: true, data: orderForUser(order, req.user) });
 }));
 
 router.post('/', asyncHandler(async (req, res, next) => {
@@ -138,6 +147,12 @@ router.post('/', asyncHandler(async (req, res, next) => {
     address,
     deliveryTimeSlot,
     paymentMethod,
+    deliveryStatus: 'Unassigned',
+    deliveryHistory: [],
+    assignedPartner: null,
+    estimatedDeliveryTime: null,
+    deliveryOtp: null,
+    deliveryOtpCode: null,
     timeline: createTimeline('Pending', timeStr),
     statusHistory: [
       {

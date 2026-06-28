@@ -22,6 +22,12 @@ import AdminDashboard from './components/AdminDashboard';
 import AdminOrders from './components/AdminOrders';
 import AdminInventory from './components/AdminInventory';
 import AdminCustomers from './components/AdminCustomers';
+import AdminDeliveryPartners from './components/AdminDeliveryPartners';
+import AdminContactMessages from './components/AdminContactMessages';
+import DeliveryPartnerDashboard from './components/DeliveryPartnerDashboard';
+import AboutView from './components/AboutView';
+import ContactView from './components/ContactView';
+import Footer from './components/Footer';
 
 export default function App() {
   // ─── Core Data State ──────────────────────────────────────────────────────
@@ -37,7 +43,7 @@ export default function App() {
   const [quests, setQuests] = useState<EcoQuest[]>([]);
 
   // ─── Authentication State ──────────────────────────────────────────────────
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; avatar: string; isAdmin: boolean } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; avatar: string; isAdmin: boolean; role?: string; isDeliveryPartner?: boolean } | null>(null);
 
   // ─── Notification State ───────────────────────────────────────────────────
   const [notifications, setNotifications] = useState<string[]>([
@@ -115,6 +121,8 @@ export default function App() {
             if (authRes.user.isAdmin) {
               setIsAdminMode(true);
               setCurrentView('admin-dashboard');
+            } else if (authRes.user.role === 'delivery_partner') {
+              setCurrentView('delivery-dashboard');
             }
           }
         } catch (e) {
@@ -155,7 +163,7 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser?.isAdmin || !isAdminMode) return;
-    if (currentView === 'admin-dashboard' || currentView === 'admin-orders') {
+    if (currentView === 'admin-dashboard' || currentView === 'admin-orders' || currentView === 'admin-delivery') {
       loadAdminData();
     }
   }, [currentUser?.isAdmin, currentView, isAdminMode, loadAdminData]);
@@ -166,7 +174,8 @@ export default function App() {
 
     const socket = createRealtimeSocket({
       email,
-      isAdmin: Boolean(currentUser?.isAdmin || isAdminMode)
+      isAdmin: Boolean(currentUser?.isAdmin || isAdminMode),
+      role: currentUser?.role
     });
 
     socket.on('connect', () => {
@@ -174,6 +183,9 @@ export default function App() {
         socket.emit('join-admin');
       }
       socket.emit('join-user', { email });
+      if (currentUser?.role === 'delivery_partner') {
+        socket.emit('join-delivery-partner', { email });
+      }
     });
 
     socket.on('notification:new', (notification: any) => {
@@ -200,6 +212,23 @@ export default function App() {
       setNotifications(prev => [`Order ${order.id} updated to ${order.status}`, ...prev].slice(0, 25));
     });
 
+    socket.on('delivery:assigned', (order: Order) => {
+      setOrders(prev => {
+        const exists = prev.some(o => o.id === order.id);
+        return exists ? prev.map(o => o.id === order.id ? order : o) : [order, ...prev];
+      });
+      setNotifications(prev => [`Delivery assigned: ${order.id}`, ...prev].slice(0, 25));
+    });
+
+    socket.on('delivery:updated', (order: Order) => {
+      setOrders(prev => {
+        const exists = prev.some(o => o.id === order.id);
+        return exists ? prev.map(o => o.id === order.id ? order : o) : [order, ...prev];
+      });
+      setActiveTrackingOrder(prev => prev?.id === order.id ? order : prev);
+      setNotifications(prev => [`Delivery update: ${order.id} is ${order.deliveryStatus}`, ...prev].slice(0, 25));
+    });
+
     socket.on('connect_error', (error) => {
       console.warn('Realtime connection failed:', error.message);
     });
@@ -222,6 +251,9 @@ export default function App() {
       setIsAdminMode(true);
       setCurrentView('admin-dashboard');
       await loadAdminData();
+    } else if (user.role === 'delivery_partner') {
+      setIsAdminMode(false);
+      setCurrentView('delivery-dashboard');
     } else {
       setIsAdminMode(false);
       setCurrentView('home');
@@ -503,6 +535,10 @@ export default function App() {
       setNotifications(prev => ['Admin pages require the admin account. Please sign in as admin@harvest.com.', ...prev].slice(0, 25));
       return;
     }
+    if (view === 'delivery-dashboard' && currentUser?.role !== 'delivery_partner') {
+      setCurrentView('login');
+      return;
+    }
     setSelectedCategoryFilter(category || 'All Products');
     setCurrentView(view);
     if (view === 'admin-dashboard' || view === 'admin-orders') {
@@ -567,7 +603,9 @@ export default function App() {
         }`}>
           <div key={`${isAdminMode}-${currentView}-${selectedProductId || ''}`} className="animate-rise-in">
             {/* View Switching Router */}
-            {!isAdminMode ? (
+            {currentView === 'delivery-dashboard' ? (
+              <DeliveryPartnerDashboard onNavigate={handleNavigate} />
+            ) : !isAdminMode ? (
               // ─── User Storefront Views ───
               <>
                 {currentView === 'home' && (
@@ -650,6 +688,12 @@ export default function App() {
                     onMoveWishlistToCart={handleMoveWishlistToCart}
                   />
                 )}
+                {currentView === 'about' && (
+                  <AboutView />
+                )}
+                {currentView === 'contact' && (
+                  <ContactView />
+                )}
                 {currentView === 'login' && (
                   <LoginView
                     onLoginSuccess={handleLoginSuccess}
@@ -694,11 +738,24 @@ export default function App() {
                     onToggleCustomerStatus={handleToggleCustomerStatus}
                   />
                 )}
+                {currentView === 'admin-delivery' && (
+                  <AdminDeliveryPartners
+                    orders={orders}
+                    onOrdersUpdated={setOrders}
+                  />
+                )}
+                {currentView === 'admin-contact' && (
+                  <AdminContactMessages />
+                )}
               </>
             )}
           </div>
         </main>
       </div>
+
+      {!isAdminMode && currentView !== 'delivery-dashboard' && (
+        <Footer onNavigate={handleNavigate} />
+      )}
 
       {/* Floating bottom nav for User store */}
       {!isAdminMode && (

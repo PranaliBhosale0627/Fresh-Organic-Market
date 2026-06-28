@@ -19,6 +19,8 @@ import cartRoutes from './routes/cart.js';
 import wishlistRoutes from './routes/wishlist.js';
 import loyaltyRoutes from './routes/loyalty.js';
 import notificationRoutes from './routes/notifications.js';
+import deliveryPartnerRoutes from './routes/deliveryPartners.js';
+import contactRoutes from './routes/contact.js';
 import { connectToDatabase } from './config/db.js';
 import { initializeSocket } from './config/socket.js';
 import { authMiddleware } from './middleware/authMiddleware.js';
@@ -71,6 +73,8 @@ app.use('/api/cart', cartRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/loyalty', loyaltyRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/delivery-partners', deliveryPartnerRoutes);
+app.use('/api/contact', contactRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

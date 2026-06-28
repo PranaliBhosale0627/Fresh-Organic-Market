@@ -53,6 +53,16 @@ export interface Order {
   address: string;
   deliveryTimeSlot: string;
   paymentMethod: string;
+  deliveryStatus?: 'Unassigned' | 'Assigned' | 'Accepted' | 'Picked Up' | 'Out for Delivery' | 'Reached Destination' | 'Delivered' | 'Rejected';
+  assignedPartner?: DeliveryPartnerSummary | null;
+  estimatedDeliveryTime?: string | null;
+  deliveryOtpCode?: string | null;
+  deliveryHistory?: {
+    status: string;
+    changedAt: string;
+    changedBy: string;
+    note?: string;
+  }[];
   createdAt?: string;
   updatedAt?: string;
   statusHistory?: {
@@ -67,6 +77,39 @@ export interface Order {
     description: string;
     completed: boolean;
   }[];
+}
+
+export interface DeliveryPartnerSummary {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  avatar?: string;
+  vehicleType: string;
+  vehicleNumber: string;
+  rating?: number;
+}
+
+export interface DeliveryPartner extends DeliveryPartnerSummary {
+  status: 'Active' | 'Inactive';
+  availability: 'Available' | 'Unavailable' | 'Busy';
+  completedDeliveries: number;
+  activeDeliveries: number;
+  averageDeliveryTime: number;
+  joinedAt?: string;
+  updatedAt?: string;
+}
+
+export interface ContactMessage {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  subject: string;
+  message: string;
+  status: 'New' | 'Read' | 'Resolved';
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Customer {

@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShoppingBasket, Boxes, Users, ClipboardMinus, HeartHandshake } from 'lucide-react';
+import { LayoutDashboard, ShoppingBasket, Boxes, Users, ClipboardMinus, HeartHandshake, Bike, Mail } from 'lucide-react';
 
 interface AdminSidebarProps {
   currentView: string;
@@ -14,8 +14,10 @@ export default function AdminSidebar({
   const menuItems = [
     { id: 'admin-dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'admin-orders', label: 'Orders', icon: ShoppingBasket },
+    { id: 'admin-delivery', label: 'Delivery', icon: Bike },
     { id: 'admin-inventory', label: 'Inventory', icon: Boxes, badge: lowStockCount > 0 ? lowStockCount : undefined },
     { id: 'admin-customers', label: 'Users', icon: Users },
+    { id: 'admin-contact', label: 'Messages', icon: Mail },
   ];
 
   return (

@@ -3,12 +3,12 @@ import { Mail, Lock, User, Sparkles, Shield, ArrowRight, CheckCircle2, ShieldAle
 import { authApi, authStorage } from '../api.js';
 
 interface LoginViewProps {
-  onLoginSuccess: (user: { name: string; email: string; avatar: string; isAdmin: boolean }, token: string) => void;
+  onLoginSuccess: (user: { name: string; email: string; avatar: string; isAdmin: boolean; role?: string; isDeliveryPartner?: boolean }, token: string) => void;
   onNavigate: (view: string) => void;
 }
 
 export default function LoginView({ onLoginSuccess, onNavigate }: LoginViewProps) {
-  const [activeTab, setActiveTab] = useState<'login' | 'register' | 'admin'>('login');
+  const [activeTab, setActiveTab] = useState<'login' | 'register' | 'admin' | 'delivery'>('login');
   
   // Inputs
   const [name, setName] = useState('');
@@ -36,10 +36,10 @@ export default function LoginView({ onLoginSuccess, onNavigate }: LoginViewProps
         }, 1500);
       } else {
         // 'login' or 'admin'
-        const loginEmail = activeTab === 'admin' ? 'admin@harvest.com' : email;
+        const loginEmail = activeTab === 'admin' ? 'admin@harvest.com' : activeTab === 'delivery' ? 'ravi.courier@harvest.com' : email;
         const res = await authApi.login(loginEmail, password);
         authStorage.setToken(res.token);
-        setSuccess(activeTab === 'admin' ? 'Admin session verified! Launching Control Room...' : 'Welcome back! Logging in...');
+        setSuccess(activeTab === 'admin' ? 'Admin session verified! Launching Control Room...' : activeTab === 'delivery' ? 'Delivery dashboard verified!' : 'Welcome back! Logging in...');
         setTimeout(() => {
           onLoginSuccess(res.user, res.token);
         }, 1500);
@@ -109,6 +109,14 @@ export default function LoginView({ onLoginSuccess, onNavigate }: LoginViewProps
             <Shield className="w-3.5 h-3.5" />
             Admin
           </button>
+          <button
+            onClick={() => { setActiveTab('delivery'); setError(null); }}
+            className={`flex-1 py-2 rounded-full text-xs font-bold transition-all ${
+              activeTab === 'delivery' ? 'bg-secondary text-white shadow' : 'text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            Rider
+          </button>
         </div>
 
         {/* Error Alert */}
@@ -146,7 +154,7 @@ export default function LoginView({ onLoginSuccess, onNavigate }: LoginViewProps
             </div>
           )}
 
-          {activeTab !== 'admin' && (
+          {activeTab !== 'admin' && activeTab !== 'delivery' && (
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-on-surface-variant block pl-1">Email Address</label>
               <div className="relative">
@@ -170,6 +178,17 @@ export default function LoginView({ onLoginSuccess, onNavigate }: LoginViewProps
               </p>
               <p className="text-[10px] text-on-surface-variant leading-normal">
                 Logging in authorizes access to the control room. Use <strong>admin@harvest.com</strong> credentials.
+              </p>
+            </div>
+          )}
+
+          {activeTab === 'delivery' && (
+            <div className="space-y-1.5 bg-secondary/5 p-4 rounded-2xl border border-secondary/10 mb-2">
+              <p className="text-[11px] text-secondary font-bold flex items-center gap-1.5">
+                <Shield className="w-4 h-4" /> Delivery Partner Access
+              </p>
+              <p className="text-[10px] text-on-surface-variant leading-normal">
+                Use <strong>ravi.courier@harvest.com</strong> with delivery partner credentials.
               </p>
             </div>
           )}
@@ -198,7 +217,7 @@ export default function LoginView({ onLoginSuccess, onNavigate }: LoginViewProps
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
               <>
-                {activeTab === 'register' ? 'Register Account' : activeTab === 'admin' ? 'Admin Access' : 'Sign In'}
+                {activeTab === 'register' ? 'Register Account' : activeTab === 'admin' ? 'Admin Access' : activeTab === 'delivery' ? 'Partner Access' : 'Sign In'}
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
@@ -210,7 +229,7 @@ export default function LoginView({ onLoginSuccess, onNavigate }: LoginViewProps
           <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">
             ⚡ Quick Demo Accounts
           </p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <button
               onClick={() => handleQuickLogin('elena.r@example.com', 'password123', false)}
               disabled={loading}
@@ -226,6 +245,14 @@ export default function LoginView({ onLoginSuccess, onNavigate }: LoginViewProps
             >
               <span className="text-primary flex items-center gap-1"><Shield className="w-3 h-3" /> System Admin</span>
               <span className="text-[9px] text-on-surface-variant font-medium">Control Dashboard</span>
+            </button>
+            <button
+              onClick={() => handleQuickLogin('ravi.courier@harvest.com', 'partner123', false)}
+              disabled={loading}
+              className="border border-secondary/20 hover:border-secondary/50 bg-secondary/5 text-secondary px-3 py-2 rounded-2xl text-[10px] font-bold transition-all text-left flex flex-col justify-center gap-0.5 active:scale-95 cursor-pointer"
+            >
+              <span className="text-secondary">Ravi Courier</span>
+              <span className="text-[9px] text-on-surface-variant font-medium">Delivery demo</span>
             </button>
           </div>
         </div>
