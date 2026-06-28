@@ -63,7 +63,7 @@ export default function AdminOrders({
 
           {/* Status filter pills */}
           <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
-            {['All', 'Pending', 'Processing', 'Shipped', 'Delivered'].map((filter) => (
+            {['All', 'Pending', 'Confirmed', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'].map((filter) => (
               <button
                 key={filter}
                 onClick={() => setStatusFilter(filter as any)}
@@ -105,10 +105,12 @@ export default function AdminOrders({
                       <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
                         o.status === 'Delivered'
                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : o.status === 'Shipped'
+                          : o.status === 'Out for Delivery'
                           ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                          : o.status === 'Processing'
+                          : o.status === 'Confirmed' || o.status === 'Packed'
                           ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                          : o.status === 'Cancelled'
+                          ? 'bg-rose-50 text-rose-700 border border-rose-200'
                           : 'bg-rose-50 text-rose-700 border border-rose-200'
                       }`}>
                         {o.status}
@@ -157,7 +159,7 @@ export default function AdminOrders({
               <div className="bg-primary/5 border border-primary/10 rounded-2xl p-5 space-y-3">
                 <p className="font-bold text-xs text-primary uppercase tracking-wider leading-none">Modify Logistic Status</p>
                 <div className="flex flex-wrap gap-2 pt-1">
-                  {(['Pending', 'Processing', 'Shipped', 'Delivered'] as Order['status'][]).map((st) => {
+                  {(['Pending', 'Confirmed', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'] as Order['status'][]).map((st) => {
                     const isCurrent = selectedOrder.status === st;
                     return (
                       <button

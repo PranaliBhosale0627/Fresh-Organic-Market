@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { User, Mail, MapPin, Calendar, Coins, Award, Ticket, Leaf, Sparkles, Zap, Check, Gift, CheckCircle2 } from 'lucide-react';
+import { User, Mail, MapPin, Calendar, Coins, Award, Ticket, Leaf, Sparkles, Zap, Check, Gift, CheckCircle2, Heart, ShoppingCart, Trash2 } from 'lucide-react';
 import { authStorage } from '../api.js';
+import { Product } from '../types';
 
 export interface EcoQuest {
   id: string;
@@ -29,6 +30,9 @@ interface ProfileViewProps {
   unlockedCoupons: string[];
   onUnlockCoupon: (couponCode: string) => void;
   currentUser: { name: string; email: string; avatar: string; isAdmin: boolean } | null;
+  wishlistItems?: Product[];
+  onRemoveWishlistItem?: (productId: string) => void;
+  onMoveWishlistToCart?: (productId: string) => void;
 }
 
 export default function ProfileView({
@@ -39,8 +43,11 @@ export default function ProfileView({
   unlockedCoupons,
   onUnlockCoupon,
   currentUser,
+  wishlistItems = [],
+  onRemoveWishlistItem,
+  onMoveWishlistToCart,
 }: ProfileViewProps) {
-  const [activeTab, setActiveTab] = useState<'rewards' | 'info'>('rewards');
+  const [activeTab, setActiveTab] = useState<'rewards' | 'wishlist' | 'info'>('rewards');
   const [redemptionSuccess, setRedemptionSuccess] = useState<string | null>(null);
 
   // Dynamic user data
@@ -139,6 +146,16 @@ export default function ProfileView({
             }`}
           >
             Personal Details
+          </button>
+          <button
+            onClick={() => setActiveTab('wishlist')}
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+              activeTab === 'wishlist'
+                ? 'bg-white text-primary shadow-sm'
+                : 'text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            Wishlist
           </button>
         </div>
       </div>
@@ -344,6 +361,60 @@ export default function ProfileView({
               )}
             </section>
           </aside>
+        </div>
+      ) : activeTab === 'wishlist' ? (
+        <div className="bg-white rounded-[32px] p-6 md:p-8 border border-outline-variant/30 shadow-sm space-y-6 animate-rise-in">
+          <div className="flex items-center justify-between gap-4 border-b border-outline-variant/10 pb-4">
+            <div>
+              <h3 className="font-display text-lg font-bold text-primary flex items-center gap-2">
+                <Heart className="w-5 h-5 text-error fill-error" /> Saved Wishlist
+              </h3>
+              <p className="text-xs text-on-surface-variant mt-1">
+                {wishlistItems.length} saved {wishlistItems.length === 1 ? 'item' : 'items'} ready for your next cart.
+              </p>
+            </div>
+          </div>
+
+          {wishlistItems.length === 0 ? (
+            <div className="py-12 text-center rounded-3xl bg-surface-container-low border border-dashed border-outline-variant">
+              <Heart className="w-10 h-10 mx-auto text-on-surface-variant/40 mb-3" />
+              <p className="font-bold text-sm text-on-surface">No saved products yet</p>
+              <p className="text-xs text-on-surface-variant mt-1">Tap the heart on products to save them here.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {wishlistItems.map((product) => (
+                <div key={product.id} className="flex gap-4 rounded-3xl border border-outline-variant/30 bg-surface-container-low/40 p-4 interactive-lift">
+                  <img
+                    src={product.image}
+                    alt={product.name}
+                    className="h-24 w-24 rounded-2xl object-cover border border-outline-variant/20"
+                  />
+                  <div className="flex min-w-0 flex-1 flex-col justify-between">
+                    <div>
+                      <h4 className="line-clamp-1 text-sm font-bold text-on-surface">{product.name}</h4>
+                      <p className="text-[11px] font-semibold text-on-surface-variant">{product.category} • {product.unit}</p>
+                      <p className="mt-1 text-base font-bold text-primary">${product.price.toFixed(2)}</p>
+                    </div>
+                    <div className="flex gap-2 pt-3">
+                      <button
+                        onClick={() => onMoveWishlistToCart?.(product.id)}
+                        className="flex items-center gap-1 rounded-full bg-primary px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white transition-all active:scale-95"
+                      >
+                        <ShoppingCart className="h-3.5 w-3.5" /> Cart
+                      </button>
+                      <button
+                        onClick={() => onRemoveWishlistItem?.(product.id)}
+                        className="flex items-center gap-1 rounded-full bg-white px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-error border border-outline-variant/30 transition-all active:scale-95"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Remove
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         /* PERSONAL INFO TAB VIEW */

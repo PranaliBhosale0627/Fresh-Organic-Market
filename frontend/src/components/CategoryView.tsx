@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, SlidersHorizontal, ArrowUpDown, ChevronDown, Check, ShoppingCart, Mail } from 'lucide-react';
+import { Search, SlidersHorizontal, ArrowUpDown, ChevronDown, Check, ShoppingCart, Mail, Heart } from 'lucide-react';
 import { Product } from '../types';
 
 interface CategoryViewProps {
@@ -8,6 +8,8 @@ interface CategoryViewProps {
   onNavigate: (view: string) => void;
   onSelectProduct: (productId: string) => void;
   onAddToCart: (product: Product) => void;
+  wishlistItems?: Product[];
+  onToggleWishlist?: (product: Product) => void;
 }
 
 export default function CategoryView({
@@ -16,6 +18,8 @@ export default function CategoryView({
   onNavigate,
   onSelectProduct,
   onAddToCart,
+  wishlistItems = [],
+  onToggleWishlist,
 }: CategoryViewProps) {
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,9 +81,9 @@ export default function CategoryView({
   };
 
   return (
-    <div className="px-4 md:px-12 py-8 max-w-7xl mx-auto space-y-8 text-left">
+    <div className="px-3 sm:px-4 md:px-10 lg:px-12 py-5 sm:py-8 max-w-7xl mx-auto space-y-6 sm:space-y-8 text-left">
       {/* Search & Sort Actions Bar */}
-      <section className="flex flex-col md:flex-row gap-4 items-center justify-between">
+      <section className="glass-panel sticky top-[76px] z-40 -mx-1 flex flex-col md:flex-row gap-3 sm:gap-4 items-center justify-between rounded-[28px] border border-white/70 p-3 shadow-lg shadow-primary/5 animate-rise-in">
         {/* Search input with pill styling */}
         <div className="w-full md:max-w-md relative group">
           <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors" />
@@ -88,13 +92,13 @@ export default function CategoryView({
             placeholder={`Search fresh ${selectedCategory === 'All Products' ? 'vegetables' : selectedCategory.toLowerCase()}...`}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-14 pl-12 pr-4 bg-white border border-outline-variant/30 rounded-full shadow-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+            className="w-full h-14 pl-12 pr-4 bg-white border border-outline-variant/30 rounded-full shadow-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all focus:shadow-lg"
           />
         </div>
 
         {/* Sort and Filters */}
         <div className="flex gap-3 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 scrollbar-none">
-          <button className="flex items-center gap-2 px-5 h-12 bg-primary-container text-on-primary-container font-semibold text-xs md:text-sm rounded-full whitespace-nowrap hover:opacity-95 transition-all">
+          <button className="flex items-center gap-2 px-5 h-12 bg-primary-container text-on-primary-container font-semibold text-xs md:text-sm rounded-full whitespace-nowrap hover:opacity-95 transition-all active:scale-95 shadow-sm">
             <SlidersHorizontal className="w-4 h-4" />
             Filters
           </button>
@@ -102,7 +106,7 @@ export default function CategoryView({
           <div className="relative">
             <button 
               onClick={() => setShowSortDropdown(!showSortDropdown)}
-              className="flex items-center gap-2 px-5 h-12 bg-white border border-outline-variant hover:bg-surface-container-low text-on-surface font-semibold text-label-md rounded-full whitespace-nowrap transition-colors"
+              className="flex items-center gap-2 px-5 h-12 bg-white border border-outline-variant hover:bg-surface-container-low text-on-surface font-semibold text-label-md rounded-full whitespace-nowrap transition-all active:scale-95 shadow-sm"
             >
               Sort by: {
                 {
@@ -137,8 +141,8 @@ export default function CategoryView({
       </section>
 
       {/* Category Selection Chips */}
-      <section className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-none">
-        {categories.map((cat) => {
+      <section className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-none animate-rise-in stagger-1">
+        {categories.map((cat, index) => {
           const isActive = selectedCategory === cat;
           return (
             <button
@@ -147,11 +151,12 @@ export default function CategoryView({
                 setSelectedCategory(cat);
                 setSearchQuery('');
               }}
-              className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
+              className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all whitespace-nowrap animate-rise-in ${
                 isActive
                   ? 'bg-primary text-white shadow-sm ring-2 ring-primary/10'
                   : 'bg-white border border-outline-variant text-on-surface-variant hover:bg-surface-container-low hover:border-secondary'
               }`}
+              style={{ animationDelay: `${index * 45}ms` }}
             >
               {cat}
             </button>
@@ -160,7 +165,7 @@ export default function CategoryView({
       </section>
 
       {/* Title & Stats */}
-      <section className="space-y-1">
+      <section className="space-y-1 animate-rise-in stagger-2">
         <h2 className="font-display-lg text-2xl md:text-3.5xl text-on-surface font-bold">
           {selectedCategory === 'All Products' ? 'Organic Produce' : selectedCategory}
         </h2>
@@ -170,7 +175,7 @@ export default function CategoryView({
       </section>
 
       {/* Bento Asymmetrical Grid */}
-      <section>
+      <section className="animate-rise-in stagger-3">
         {filteredProducts.length === 0 ? (
           <div className="py-16 text-center border border-dashed border-outline-variant rounded-[32px] bg-white">
             <p className="text-on-surface-variant font-medium text-sm">
@@ -178,19 +183,21 @@ export default function CategoryView({
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {filteredProducts.map((p) => {
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5 lg:gap-6">
+            {filteredProducts.map((p, index) => {
               const isAdded = addedItemIds.includes(p.id);
+              const isWishlisted = wishlistItems.some(item => item.id === p.id);
               return (
                 <div
                   key={p.id}
                   onClick={() => onSelectProduct(p.id)}
-                  className="group flex flex-col bg-white rounded-3xl overflow-hidden border border-outline-variant/30 hover:shadow-xl transition-all duration-300 cursor-pointer shadow-sm relative h-full"
+                  className="group flex flex-col bg-white rounded-[22px] sm:rounded-3xl overflow-hidden border border-outline-variant/30 hover:shadow-xl hover:shadow-primary/10 interactive-lift cursor-pointer shadow-sm relative h-full animate-rise-in"
+                  style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
                 >
                   {/* Photo area */}
                   <div className="relative aspect-[4/5] overflow-hidden bg-surface-container-low">
                     <img
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
                       src={p.image}
                       alt={p.name}
                     />
@@ -199,10 +206,20 @@ export default function CategoryView({
                         {p.tag}
                       </div>
                     )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleWishlist?.(p);
+                      }}
+                      className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm p-2 rounded-full hover:bg-white hover:scale-110 active:scale-90 transition-all z-10 border border-outline-variant/10 shadow-sm"
+                      title={isWishlisted ? 'Remove from wishlist' : 'Save to wishlist'}
+                    >
+                      <Heart className={`w-4 h-4 ${isWishlisted ? 'text-error fill-error' : 'text-on-surface-variant'}`} />
+                    </button>
                   </div>
 
                   {/* Contents */}
-                  <div className="p-4 md:p-5 flex flex-col flex-grow justify-between gap-2">
+                  <div className="p-3 sm:p-4 md:p-5 flex flex-col flex-grow justify-between gap-2">
                     <div>
                       <span className="font-semibold text-[11px] text-on-surface-variant/80 tracking-wide uppercase">
                         {p.unit}
@@ -223,7 +240,7 @@ export default function CategoryView({
                       </div>
                       <button
                         onClick={(e) => handleQuickAdd(p, e)}
-                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-md active:scale-90 ${
+                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-md active:scale-90 hover:-translate-y-0.5 ${
                           isAdded
                             ? 'bg-secondary text-white'
                             : 'bg-primary text-on-primary hover:bg-primary-container'
@@ -245,7 +262,7 @@ export default function CategoryView({
       </section>
 
       {/* Premium High-End Newsletter Box */}
-      <section className="mt-12 relative rounded-[40px] overflow-hidden bg-primary-container p-8 md:p-16 text-on-primary-container shadow-lg border border-primary/20">
+      <section className="mt-10 sm:mt-12 relative rounded-[30px] sm:rounded-[40px] overflow-hidden bg-primary-container p-6 sm:p-8 md:p-16 text-on-primary-container shadow-xl shadow-primary/10 border border-primary/20 animate-rise-in stagger-4">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,_rgba(255,255,255,0.25)_0%,_transparent_100%)]"></div>
         </div>

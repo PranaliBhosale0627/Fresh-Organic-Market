@@ -58,8 +58,10 @@ function collections() {
     orders: database.collection('orders'),
     customers: database.collection('customers'),
     carts: database.collection('carts'),
+    wishlists: database.collection('wishlists'),
     loyalties: database.collection('loyalties'),
-    accounts: database.collection('accounts')
+    accounts: database.collection('accounts'),
+    notifications: database.collection('notifications')
   };
 }
 
@@ -72,8 +74,12 @@ async function createIndexes() {
     db.customers.createIndex({ id: 1 }, { unique: true }),
     db.customers.createIndex({ email: 1 }, { unique: true }),
     db.carts.createIndex({ email: 1 }, { unique: true }),
+    db.wishlists.createIndex({ email: 1 }, { unique: true }),
     db.loyalties.createIndex({ email: 1 }, { unique: true }),
-    db.accounts.createIndex({ email: 1 }, { unique: true })
+    db.accounts.createIndex({ email: 1 }, { unique: true }),
+    db.notifications.createIndex({ recipientEmail: 1, createdAt: -1 }),
+    db.notifications.createIndex({ recipientRole: 1, createdAt: -1 }),
+    db.notifications.createIndex({ id: 1 }, { unique: true })
   ]);
 }
 
@@ -105,6 +111,15 @@ async function seedDatabase() {
   );
 
   await ensureUserState(DEFAULT_USER_EMAIL, 185);
+  await migrateLegacyOrders();
+}
+
+async function migrateLegacyOrders() {
+  const db = collections();
+  await Promise.all([
+    db.orders.updateMany({ status: 'Processing' }, { $set: { status: 'Packed' } }),
+    db.orders.updateMany({ status: 'Shipped' }, { $set: { status: 'Out for Delivery' } })
+  ]);
 }
 
 function createDefaultLoyalty(coins = 50) {
@@ -125,6 +140,12 @@ async function ensureUserState(email, startingCoins = 50) {
     { upsert: true }
   );
 
+  await db.wishlists.updateOne(
+    { email },
+    { $setOnInsert: { email, items: [] } },
+    { upsert: true }
+  );
+
   await db.loyalties.updateOne(
     { email },
     { $setOnInsert: { email, ...createDefaultLoyalty(startingCoins) } },
@@ -139,6 +160,20 @@ async function getCart(email) {
 
 async function setCart(email, items) {
   await collections().carts.updateOne(
+    { email },
+    { $set: { email, items } },
+    { upsert: true }
+  );
+  return items;
+}
+
+async function getWishlist(email) {
+  const wishlist = await collections().wishlists.findOne({ email });
+  return wishlist?.items || [];
+}
+
+async function setWishlist(email, items) {
+  await collections().wishlists.updateOne(
     { email },
     { $set: { email, items } },
     { upsert: true }
@@ -168,8 +203,10 @@ export {
   createDefaultLoyalty,
   ensureUserState,
   getCart,
+  getWishlist,
   getLoyalty,
   setCart,
+  setWishlist,
   setLoyalty,
   withoutMongoId
 };

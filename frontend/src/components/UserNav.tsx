@@ -24,7 +24,7 @@ export default function UserNav({
   return (
     <>
       {/* Bottom Sticky Tab Bar (Mobile Only) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white md:hidden shadow-[0_-2px_10px_rgba(45,90,39,0.08)] border-t border-outline-variant/30">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 glass-panel md:hidden shadow-[0_-8px_28px_rgba(45,90,39,0.10)] border-t border-white/70">
         <div className="flex justify-around items-center h-16 px-2">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -33,16 +33,16 @@ export default function UserNav({
               <button
                 key={tab.id}
                 onClick={() => onNavigate(tab.id)}
-                className={`relative flex flex-col items-center justify-center py-1 px-4 rounded-full transition-all duration-200 active:scale-90 ${
+                className={`relative flex flex-col items-center justify-center py-1 px-3 sm:px-4 rounded-full transition-all duration-200 active:scale-90 ${
                   isActive
-                    ? 'bg-secondary-container text-on-secondary-container font-bold font-label-md'
+                    ? 'bg-secondary-container text-on-secondary-container font-bold font-label-md shadow-sm -translate-y-1'
                     : 'text-on-surface-variant hover:text-primary'
                 }`}
               >
                 <div className="relative">
                   <Icon className="w-5 h-5" fill={isActive ? 'currentColor' : 'none'} />
                   {tab.badge !== undefined && tab.badge > 0 && (
-                    <span className="absolute -top-1.5 -right-2 bg-error text-white text-[10px] font-bold w-4.5 h-4.5 rounded-full flex items-center justify-center ring-2 ring-white">
+                    <span className="absolute -top-1.5 -right-2 bg-error text-white text-[10px] font-bold w-4.5 h-4.5 rounded-full flex items-center justify-center ring-2 ring-white animate-pulse">
                       {tab.badge}
                     </span>
                   )}
@@ -55,10 +55,10 @@ export default function UserNav({
       </nav>
 
       {/* Floating Action Button for Cart (Desktop Only) */}
-      <div className="fixed bottom-8 right-8 hidden md:block z-50">
+      <div className="fixed bottom-8 right-8 hidden md:block z-50 animate-rise-in">
         <button
           onClick={() => onNavigate('cart')}
-          className="bg-primary text-on-primary w-16 h-16 rounded-2xl shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center group relative border border-primary/20"
+          className="bg-primary text-on-primary w-16 h-16 rounded-2xl shadow-xl hover:shadow-2xl hover:shadow-primary/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center group relative border border-primary/20"
         >
           <ShoppingCart className="w-6 h-6" />
           {cartCount > 0 && (

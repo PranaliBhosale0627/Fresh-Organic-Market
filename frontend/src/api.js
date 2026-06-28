@@ -106,6 +106,14 @@ export const cartApi = {
   clear: () => request('/cart', { method: 'DELETE' })
 };
 
+// Wishlist
+export const wishlistApi = {
+  get: () => request('/wishlist'),
+  add: (productId) => request('/wishlist', { method: 'POST', body: { productId } }),
+  remove: (productId) => request(`/wishlist/${productId}`, { method: 'DELETE' }),
+  moveToCart: (productId) => request(`/wishlist/${productId}/move-to-cart`, { method: 'POST' })
+};
+
 // ─── Loyalty ──────────────────────────────────────────────────────────────────
 
 export const loyaltyApi = {

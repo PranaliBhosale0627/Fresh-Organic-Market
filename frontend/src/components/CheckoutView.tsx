@@ -70,13 +70,13 @@ export default function CheckoutView({
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 mb-24">
+    <div className="max-w-5xl mx-auto px-3 sm:px-4 py-5 sm:py-8 mb-24 animate-rise-in">
       {/* Top App Bar */}
-      <div className="flex justify-between items-center mb-8 border-b border-outline-variant/10 pb-4">
+      <div className="flex justify-between items-center mb-6 sm:mb-8 border-b border-outline-variant/10 pb-4 animate-rise-in">
         <div className="flex items-center gap-3">
           <button 
             onClick={() => onNavigate('cart')}
-            className="active:scale-95 duration-150 hover:bg-surface-container-low transition-colors rounded-full p-2 text-primary"
+            className="active:scale-95 duration-150 hover:bg-surface-container-low transition-all rounded-full p-2 text-primary border border-outline-variant/20 bg-white shadow-sm"
           >
             <ArrowLeft className="w-6 h-6" />
           </button>
@@ -84,11 +84,11 @@ export default function CheckoutView({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6">
         {/* Left Column: Checkout Details */}
         <div className="lg:col-span-2 space-y-6">
           {/* Delivery Address Section */}
-          <section className="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant/30">
+          <section className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm hover:shadow-xl hover:shadow-primary/10 border border-outline-variant/30 interactive-lift animate-rise-in">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="bg-secondary-container p-2 rounded-xl text-on-secondary-container">
@@ -122,7 +122,7 @@ export default function CheckoutView({
           </section>
 
           {/* Delivery Time Section */}
-          <section className="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant/30">
+          <section className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm hover:shadow-xl hover:shadow-primary/10 border border-outline-variant/30 interactive-lift animate-rise-in stagger-1">
             <div className="flex items-center gap-3 mb-6">
               <div className="bg-secondary-container p-2 rounded-xl text-on-secondary-container">
                 <Clock className="w-5 h-5" />
@@ -138,7 +138,7 @@ export default function CheckoutView({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <button 
                     onClick={() => setSelectedSlot('11:00 AM (Standard)')}
-                    className={`border rounded-2xl p-4 text-left transition-all ${
+                    className={`border rounded-2xl p-4 text-left transition-all active:scale-95 ${
                       selectedSlot === '11:00 AM (Standard)'
                         ? 'border-2 border-primary bg-primary-fixed-dim/10'
                         : 'border-outline-variant hover:bg-surface-container-low'
@@ -149,7 +149,7 @@ export default function CheckoutView({
                   </button>
                   <button 
                     onClick={() => setSelectedSlot('02:30 PM (Express)')}
-                    className={`border rounded-2xl p-4 text-left transition-all ${
+                    className={`border rounded-2xl p-4 text-left transition-all active:scale-95 ${
                       selectedSlot === '02:30 PM (Express)'
                         ? 'border-2 border-primary bg-primary-fixed-dim/10'
                         : 'border-outline-variant hover:bg-surface-container-low'
@@ -160,7 +160,7 @@ export default function CheckoutView({
                   </button>
                   <button 
                     onClick={() => setSelectedSlot('05:00 PM (Eco-Consolidated)')}
-                    className={`border rounded-2xl p-4 text-left transition-all relative overflow-hidden ${
+                    className={`border rounded-2xl p-4 text-left transition-all active:scale-95 relative overflow-hidden ${
                       selectedSlot === '05:00 PM (Eco-Consolidated)'
                         ? 'border-2 border-secondary bg-secondary-container/10'
                         : 'border-outline-variant hover:bg-surface-container-low'
@@ -184,7 +184,7 @@ export default function CheckoutView({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <button 
                     onClick={() => setSelectedSlot('09:00 AM (Standard)')}
-                    className={`border rounded-2xl p-4 text-left transition-all ${
+                    className={`border rounded-2xl p-4 text-left transition-all active:scale-95 ${
                       selectedSlot === '09:00 AM (Standard)'
                         ? 'border-2 border-primary bg-primary-fixed-dim/10'
                         : 'border-outline-variant hover:bg-surface-container-low'
@@ -195,7 +195,7 @@ export default function CheckoutView({
                   </button>
                   <button 
                     onClick={() => setSelectedSlot('12:00 PM (Eco-Consolidated)')}
-                    className={`border rounded-2xl p-4 text-left transition-all relative overflow-hidden ${
+                    className={`border rounded-2xl p-4 text-left transition-all active:scale-95 relative overflow-hidden ${
                       selectedSlot === '12:00 PM (Eco-Consolidated)'
                         ? 'border-2 border-secondary bg-secondary-container/10'
                         : 'border-outline-variant hover:bg-surface-container-low'
@@ -215,7 +215,7 @@ export default function CheckoutView({
           </section>
 
           {/* Payment Method Section */}
-          <section className="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant/30">
+          <section className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm hover:shadow-xl hover:shadow-primary/10 border border-outline-variant/30 interactive-lift animate-rise-in stagger-2">
             <div className="flex items-center gap-3 mb-6">
               <div className="bg-secondary-container p-2 rounded-xl text-on-secondary-container">
                 <CreditCard className="w-5 h-5" />
@@ -227,7 +227,7 @@ export default function CheckoutView({
               {/* Apple Pay */}
               <label 
                 onClick={() => setSelectedPayment('Apple Pay')}
-                className={`flex items-center p-4 border rounded-xl cursor-pointer hover:bg-surface-container-low transition-colors group ${
+                className={`flex items-center p-4 border rounded-xl cursor-pointer hover:bg-surface-container-low transition-all active:scale-[0.99] group ${
                   selectedPayment === 'Apple Pay' ? 'border-2 border-primary bg-primary-fixed-dim/10' : 'border-outline-variant'
                 }`}
               >
@@ -250,7 +250,7 @@ export default function CheckoutView({
               {/* Credit Card */}
               <label 
                 onClick={() => setSelectedPayment('Credit Card')}
-                className={`flex items-center p-4 border rounded-xl cursor-pointer hover:bg-surface-container-low transition-colors group ${
+                className={`flex items-center p-4 border rounded-xl cursor-pointer hover:bg-surface-container-low transition-all active:scale-[0.99] group ${
                   selectedPayment === 'Credit Card' ? 'border-2 border-primary bg-primary-fixed-dim/10' : 'border-outline-variant'
                 }`}
               >
@@ -273,7 +273,7 @@ export default function CheckoutView({
               {/* UPI Payment */}
               <label 
                 onClick={() => setSelectedPayment('UPI Payment')}
-                className={`flex items-center p-4 border rounded-xl cursor-pointer hover:bg-surface-container-low transition-colors group ${
+                className={`flex items-center p-4 border rounded-xl cursor-pointer hover:bg-surface-container-low transition-all active:scale-[0.99] group ${
                   selectedPayment === 'UPI Payment' ? 'border-2 border-primary bg-primary-fixed-dim/10' : 'border-outline-variant'
                 }`}
               >
@@ -297,10 +297,10 @@ export default function CheckoutView({
         </div>
 
         {/* Right Column: Order Summary Card */}
-        <aside className="lg:col-span-1 space-y-6">
+        <aside className="lg:col-span-1 space-y-6 lg:sticky lg:top-28 animate-rise-in stagger-3">
           {/* Unlocked Coupons Wallet slider */}
           {unlockedCoupons.length > 0 && (
-            <div className="bg-emerald-50/50 rounded-2xl p-5 border border-emerald-200 text-left space-y-3">
+            <div className="bg-emerald-50/50 rounded-2xl p-5 border border-emerald-200 text-left space-y-3 shadow-sm">
               <p className="font-bold text-[11px] text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
                 <Ticket className="w-4 h-4 rotate-45 text-secondary" /> Unlocked Wallet Vouchers
               </p>
@@ -316,7 +316,7 @@ export default function CheckoutView({
                     <button
                       key={code}
                       onClick={() => setSelectedCoupon(isApplied ? '' : code)}
-                      className={`flex-shrink-0 px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border ${
+                      className={`flex-shrink-0 px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all active:scale-95 border ${
                         isApplied
                           ? 'bg-primary text-on-primary border-primary shadow-sm'
                           : 'bg-white text-on-surface border-outline-variant/35 hover:border-outline-variant'
@@ -333,7 +333,7 @@ export default function CheckoutView({
             </div>
           )}
 
-          <div className="bg-white rounded-2xl p-6 shadow-md border border-outline-variant/50 space-y-6 text-left">
+          <div className="bg-white rounded-2xl p-6 shadow-xl shadow-primary/10 border border-outline-variant/50 space-y-6 text-left">
             <h2 className="font-bold text-base text-on-surface border-b border-outline-variant/10 pb-3">
               Order Summary
             </h2>
@@ -371,7 +371,7 @@ export default function CheckoutView({
             <div className="space-y-3 pt-2">
               <button
                 onClick={handlePlaceOrder}
-                className="w-full bg-primary text-on-primary py-4 rounded-full font-bold text-sm hover:bg-primary-container transition-all shadow-md active:scale-95 duration-150 border border-primary/20"
+                className="w-full bg-primary text-on-primary py-4 rounded-full font-bold text-sm hover:bg-primary-container hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/25 transition-all shadow-md active:scale-95 duration-150 border border-primary/20"
               >
                 Place Order
               </button>
@@ -382,7 +382,7 @@ export default function CheckoutView({
           </div>
 
           {/* Secure Trust Alert */}
-          <div className="bg-surface-container-low rounded-xl p-4 flex items-start gap-3 border border-outline-variant/20 shadow-sm text-left">
+          <div className="bg-surface-container-low rounded-xl p-4 flex items-start gap-3 border border-outline-variant/20 shadow-sm text-left interactive-lift">
             <ShieldCheck className="w-5 h-5 text-secondary shrink-0" />
             <div>
               <p className="font-bold text-xs text-on-surface">Safe &amp; Secure Payment</p>

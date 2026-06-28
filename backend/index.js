@@ -9,20 +9,25 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import http from 'http';
 
 import authRoutes from './routes/auth.js';
 import productRoutes from './routes/products.js';
 import orderRoutes from './routes/orders.js';
 import customerRoutes from './routes/customers.js';
 import cartRoutes from './routes/cart.js';
+import wishlistRoutes from './routes/wishlist.js';
 import loyaltyRoutes from './routes/loyalty.js';
+import notificationRoutes from './routes/notifications.js';
 import { connectToDatabase } from './config/db.js';
+import { initializeSocket } from './config/socket.js';
 import { authMiddleware } from './middleware/authMiddleware.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 dotenv.config();
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 const allowedOrigins = (process.env.CORS_ORIGIN || '')
   .split(',')
@@ -63,14 +68,18 @@ app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/cart', cartRoutes);
+app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/loyalty', loyaltyRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
 
 connectToDatabase()
   .then(() => {
-    app.listen(PORT, () => {
+    initializeSocket(server, allowedOrigins);
+
+    server.listen(PORT, () => {
       console.log('');
       console.log('  Verdant Harvest API Server');
       console.log(`  Running at: http://localhost:${PORT}`);

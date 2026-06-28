@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Product, CartItem, Order, Customer } from './types';
-import { productsApi, ordersApi, customersApi, cartApi, loyaltyApi, authApi, authStorage } from './api.js';
+import { productsApi, ordersApi, customersApi, cartApi, wishlistApi, loyaltyApi, authApi, authStorage } from './api.js';
+import { createRealtimeSocket } from './realtime.js';
 
 // Components
 import Header from './components/Header';
@@ -28,6 +29,7 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [wishlistItems, setWishlistItems] = useState<Product[]>([]);
 
   // ─── Loyalty State ────────────────────────────────────────────────────────
   const [coins, setCoins] = useState<number>(185);
@@ -57,12 +59,14 @@ export default function App() {
   // ─── User-Specific Data Loading ───────────────────────────────────────────
   const loadUserData = useCallback(async () => {
     try {
-      const [cartRes, loyaltyRes, ordersRes] = await Promise.all([
+      const [cartRes, wishlistRes, loyaltyRes, ordersRes] = await Promise.all([
         cartApi.get(),
+        wishlistApi.get(),
         loyaltyApi.get(),
         ordersApi.getAll()
       ]);
       setCartItems(cartRes.data);
+      setWishlistItems(wishlistRes.data);
       setCoins(loyaltyRes.data.coins);
       setUnlockedCoupons(loyaltyRes.data.unlockedCoupons);
       setQuests(loyaltyRes.data.quests);
@@ -125,6 +129,55 @@ export default function App() {
     loadAllData();
   }, [loadAllData]);
 
+  useEffect(() => {
+    const email = currentUser?.email || authStorage.getToken();
+    if (!email) return;
+
+    const socket = createRealtimeSocket({
+      email,
+      isAdmin: Boolean(currentUser?.isAdmin || isAdminMode)
+    });
+
+    socket.on('connect', () => {
+      if (currentUser?.isAdmin || isAdminMode) {
+        socket.emit('join-admin');
+      }
+      socket.emit('join-user', { email });
+    });
+
+    socket.on('notification:new', (notification: any) => {
+      const message = notification?.message || notification?.title || 'New notification';
+      setNotifications(prev => [message, ...prev].slice(0, 25));
+    });
+
+    socket.on('order:new', (order: Order) => {
+      setOrders(prev => {
+        if (prev.some(o => o.id === order.id)) return prev;
+        return [order, ...prev];
+      });
+      setNotifications(prev => [`New order received: ${order.id}`, ...prev].slice(0, 25));
+    });
+
+    socket.on('order:updated', (order: Order) => {
+      setOrders(prev => {
+        const exists = prev.some(o => o.id === order.id);
+        if (!exists) return [order, ...prev];
+        return prev.map(o => o.id === order.id ? order : o);
+      });
+      setActiveTrackingOrder(prev => prev?.id === order.id ? order : prev);
+      setSelectedOrderForInspection(prev => prev?.id === order.id ? order : prev);
+      setNotifications(prev => [`Order ${order.id} updated to ${order.status}`, ...prev].slice(0, 25));
+    });
+
+    socket.on('connect_error', (error) => {
+      console.warn('Realtime connection failed:', error.message);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [currentUser?.email, currentUser?.isAdmin, isAdminMode]);
+
   // Scroll to top on view change
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -153,6 +206,7 @@ export default function App() {
     
     // Clear state
     setCartItems([]);
+    setWishlistItems([]);
     setCoins(185);
     setUnlockedCoupons([]);
     setQuests([]);
@@ -200,6 +254,34 @@ export default function App() {
     } catch (err) {
       console.error('Remove cart item failed:', err);
       setCartItems(prev => prev.filter(item => item.product.id !== productId));
+    }
+  };
+
+  const handleToggleWishlist = async (product: Product) => {
+    const isSaved = wishlistItems.some(item => item.id === product.id);
+
+    try {
+      const res = isSaved
+        ? await wishlistApi.remove(product.id)
+        : await wishlistApi.add(product.id);
+      setWishlistItems(res.data);
+      setNotifications(prev => [
+        isSaved ? `${product.name} removed from wishlist` : `${product.name} saved to wishlist`,
+        ...prev
+      ].slice(0, 25));
+    } catch (err) {
+      console.error('Wishlist update failed:', err);
+    }
+  };
+
+  const handleMoveWishlistToCart = async (productId: string) => {
+    try {
+      const res = await wishlistApi.moveToCart(productId);
+      setWishlistItems(res.data.wishlist);
+      setCartItems(res.data.cart);
+      setNotifications(prev => ['Wishlist item moved to cart', ...prev].slice(0, 25));
+    } catch (err) {
+      console.error('Move wishlist item to cart failed:', err);
     }
   };
 
@@ -425,10 +507,10 @@ export default function App() {
         )}
 
         {/* Core Frame Panel */}
-        <main className={`flex-1 w-full px-4 md:px-6 transition-all duration-300 ${
+        <main className={`flex-1 w-full px-3 sm:px-4 md:px-6 transition-all duration-300 ${
           isAdminMode ? 'lg:pl-[300px] lg:pt-6' : 'pt-4'
         }`}>
-          <div className="animate-fade-in">
+          <div key={`${isAdminMode}-${currentView}-${selectedProductId || ''}`} className="animate-rise-in">
             {/* View Switching Router */}
             {!isAdminMode ? (
               // ─── User Storefront Views ───
@@ -439,6 +521,8 @@ export default function App() {
                     onNavigate={handleNavigate}
                     onSelectProduct={handleSelectProduct}
                     onAddToCart={handleAddToCart}
+                    wishlistItems={wishlistItems}
+                    onToggleWishlist={handleToggleWishlist}
                   />
                 )}
                 {(currentView === 'category' || currentView === 'search') && (
@@ -448,6 +532,8 @@ export default function App() {
                     onNavigate={handleNavigate}
                     onSelectProduct={handleSelectProduct}
                     onAddToCart={handleAddToCart}
+                    wishlistItems={wishlistItems}
+                    onToggleWishlist={handleToggleWishlist}
                   />
                 )}
                 {currentView === 'product-detail' && selectedProductId && (
@@ -455,6 +541,8 @@ export default function App() {
                     product={products.find(p => p.id === selectedProductId) || products[0]}
                     onNavigate={handleNavigate}
                     onAddToCart={handleAddToCart}
+                    isWishlisted={wishlistItems.some(item => item.id === selectedProductId)}
+                    onToggleWishlist={handleToggleWishlist}
                   />
                 )}
                 {currentView === 'cart' && (
@@ -495,6 +583,12 @@ export default function App() {
                     unlockedCoupons={unlockedCoupons}
                     onUnlockCoupon={handleUnlockCoupon}
                     currentUser={currentUser}
+                    wishlistItems={wishlistItems}
+                    onRemoveWishlistItem={(productId) => {
+                      const product = wishlistItems.find(item => item.id === productId);
+                      if (product) handleToggleWishlist(product);
+                    }}
+                    onMoveWishlistToCart={handleMoveWishlistToCart}
                   />
                 )}
                 {currentView === 'login' && (

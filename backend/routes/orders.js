@@ -1,9 +1,32 @@
 import express from 'express';
 import { collections, getLoyalty, setCart, setLoyalty, withoutMongoId } from '../config/db.js';
+import { emitToAdmins, emitToUser } from '../config/socket.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { notifyAdmins, notifyCustomer } from '../services/notificationService.js';
 
 const router = express.Router();
+const ORDER_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'];
+
+function createTimeline(status, timeStr) {
+  const stageMap = [
+    { stage: 'Order Placed', activeStatuses: ORDER_STATUSES, description: "We've received your order and started preparing." },
+    { stage: 'Confirmed', activeStatuses: ['Confirmed', 'Packed', 'Out for Delivery', 'Delivered'], description: 'Your order has been confirmed by the store.' },
+    { stage: 'Packed', activeStatuses: ['Packed', 'Out for Delivery', 'Delivered'], description: 'All items are packed and quality checked.' },
+    { stage: 'Out for Delivery', activeStatuses: ['Out for Delivery', 'Delivered'], description: 'Your order is on the way.' },
+    { stage: 'Delivered', activeStatuses: ['Delivered'], description: 'Order delivered successfully.' }
+  ];
+
+  return stageMap.map((step) => {
+    const completed = step.activeStatuses.includes(status);
+    return {
+      stage: step.stage,
+      time: completed ? timeStr : 'Pending',
+      description: step.description,
+      completed
+    };
+  });
+}
 
 router.get('/', asyncHandler(async (req, res) => {
   const { status, customerId } = req.query;
@@ -33,9 +56,11 @@ router.get('/stats/summary', asyncHandler(async (req, res, next) => {
   const revenue = orders.filter((o) => o.status === 'Delivered').reduce((sum, o) => sum + o.total, 0);
   const byStatus = {
     Pending: orders.filter((o) => o.status === 'Pending').length,
-    Processing: orders.filter((o) => o.status === 'Processing').length,
-    Shipped: orders.filter((o) => o.status === 'Shipped').length,
-    Delivered: orders.filter((o) => o.status === 'Delivered').length
+    Confirmed: orders.filter((o) => o.status === 'Confirmed').length,
+    Packed: orders.filter((o) => o.status === 'Packed').length,
+    'Out for Delivery': orders.filter((o) => o.status === 'Out for Delivery').length,
+    Delivered: orders.filter((o) => o.status === 'Delivered').length,
+    Cancelled: orders.filter((o) => o.status === 'Cancelled').length
   };
 
   res.json({
@@ -87,6 +112,7 @@ router.post('/', asyncHandler(async (req, res, next) => {
   const now = new Date();
   const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const createdAt = now.toISOString();
   const customerName = user.customer ? user.customer.name : 'Anonymous Customer';
   const customerAvatar = user.customer ? user.customer.avatar : 'AC';
 
@@ -108,15 +134,21 @@ router.post('/', asyncHandler(async (req, res, next) => {
     discount: parseFloat(discount.toFixed(2)),
     total: parseFloat(total.toFixed(2)),
     status: 'Pending',
+    paymentStatus: paymentMethod.toLowerCase().includes('cash') ? 'Pending' : 'Paid',
     address,
     deliveryTimeSlot,
     paymentMethod,
-    timeline: [
-      { stage: 'Order Received', time: timeStr, description: "We've received your order and started preparing.", completed: true },
-      { stage: 'Packed', time: 'Pending', description: 'All items will be hand-picked and double-checked.', completed: false },
-      { stage: 'On the Way', time: 'Pending', description: 'Rider dispatch pending.', completed: false },
-      { stage: 'Delivered', time: 'Pending', description: 'Expected shortly.', completed: false }
-    ]
+    timeline: createTimeline('Pending', timeStr),
+    statusHistory: [
+      {
+        status: 'Pending',
+        changedAt: createdAt,
+        changedBy: user.email,
+        note: 'Order placed by customer'
+      }
+    ],
+    createdAt,
+    updatedAt: createdAt
   };
 
   for (const item of cartItems) {
@@ -147,6 +179,16 @@ router.post('/', asyncHandler(async (req, res, next) => {
   await collections().orders.insertOne(newOrder);
   await setCart(user.email, []);
 
+  await notifyAdmins({
+    type: 'order.created',
+    title: 'New Order',
+    message: `${customerName} placed order ${newOrder.id}`,
+    data: { orderId: newOrder.id, total: newOrder.total, customerEmail: user.email }
+  });
+
+  emitToAdmins('order:new', newOrder);
+  emitToUser(user.email, 'order:updated', newOrder);
+
   res.status(201).json({ success: true, data: newOrder, message: 'Order placed successfully' });
 }));
 
@@ -156,34 +198,48 @@ router.put('/:id/status', asyncHandler(async (req, res, next) => {
   }
 
   const { status } = req.body;
-  const validStatuses = ['Pending', 'Processing', 'Shipped', 'Delivered'];
-  if (!status || !validStatuses.includes(status)) {
-    return next(new ApiError(`Invalid status. Must be one of: ${validStatuses.join(', ')}`, 400));
+  if (!status || !ORDER_STATUSES.includes(status)) {
+    return next(new ApiError(`Invalid status. Must be one of: ${ORDER_STATUSES.join(', ')}`, 400));
   }
 
   const order = await collections().orders.findOne({ id: req.params.id });
   if (!order) return next(new ApiError(`Order '${req.params.id}' not found`, 404));
 
   const timeStr = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  const updatedTimeline = order.timeline.map((step) => {
-    if (status === 'Processing' && step.stage === 'Packed') {
-      return { ...step, time: timeStr, completed: true };
+  const changedAt = new Date().toISOString();
+  const updatedTimeline = status === 'Cancelled'
+    ? (order.timeline || createTimeline('Pending', timeStr)).map((step) => ({ ...step, completed: false }))
+    : createTimeline(status, timeStr);
+  const statusHistory = [
+    ...(order.statusHistory || []),
+    {
+      status,
+      changedAt,
+      changedBy: req.user.email,
+      note: `Order marked as ${status}`
     }
-    if (status === 'Shipped') {
-      if (step.stage === 'Packed') return { ...step, completed: true };
-      if (step.stage === 'On the Way') return { ...step, time: timeStr, completed: true };
-    }
-    if (status === 'Delivered') {
-      if (step.stage === 'Packed' || step.stage === 'On the Way') return { ...step, completed: true };
-      if (step.stage === 'Delivered') return { ...step, time: timeStr, completed: true };
-    }
-    return step;
+  ];
+
+  await collections().orders.updateOne(
+    { id: req.params.id },
+    { $set: { status, timeline: updatedTimeline, statusHistory, updatedAt: changedAt } }
+  );
+
+  const updatedOrder = { ...withoutMongoId(order), status, timeline: updatedTimeline, statusHistory, updatedAt: changedAt };
+
+  await notifyCustomer(order.customerEmail, {
+    type: 'order.status',
+    title: 'Order Status Updated',
+    message: `Your order ${order.id} is now ${status}`,
+    data: { orderId: order.id, status }
   });
 
-  await collections().orders.updateOne({ id: req.params.id }, { $set: { status, timeline: updatedTimeline } });
+  emitToUser(order.customerEmail, 'order:updated', updatedOrder);
+  emitToAdmins('order:updated', updatedOrder);
+
   res.json({
     success: true,
-    data: { ...withoutMongoId(order), status, timeline: updatedTimeline },
+    data: updatedOrder,
     message: `Order status updated to '${status}'`
   });
 }));

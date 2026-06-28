@@ -48,10 +48,19 @@ export interface Order {
   tax: number;
   discount: number;
   total: number;
-  status: 'Pending' | 'Processing' | 'Shipped' | 'Delivered';
+  status: 'Pending' | 'Confirmed' | 'Packed' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
+  paymentStatus?: 'Pending' | 'Paid' | 'Failed' | 'Refunded';
   address: string;
   deliveryTimeSlot: string;
   paymentMethod: string;
+  createdAt?: string;
+  updatedAt?: string;
+  statusHistory?: {
+    status: Order['status'];
+    changedAt: string;
+    changedBy: string;
+    note?: string;
+  }[];
   timeline: {
     stage: string;
     time?: string;
