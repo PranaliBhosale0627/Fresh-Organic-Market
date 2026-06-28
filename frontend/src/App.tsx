@@ -583,6 +583,10 @@ export default function App() {
                     unlockedCoupons={unlockedCoupons}
                     onUnlockCoupon={handleUnlockCoupon}
                     currentUser={currentUser}
+                    orders={orders}
+                    products={products}
+                    notifications={notifications}
+                    onNavigate={handleNavigate}
                     wishlistItems={wishlistItems}
                     onRemoveWishlistItem={(productId) => {
                       const product = wishlistItems.find(item => item.id === productId);
@@ -605,6 +609,8 @@ export default function App() {
                   <AdminDashboard
                     orders={orders}
                     products={products}
+                    customers={customers}
+                    notifications={notifications}
                     onNavigate={handleNavigate}
                     onSelectOrder={handleSelectOrderFromDashboard}
                     onRestock={handleRestockProduct}
