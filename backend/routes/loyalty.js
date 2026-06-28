@@ -1,120 +1,138 @@
 import express from 'express';
-const router = express.Router();
-import { db } from '../config/db.js';
+import { getLoyalty, setLoyalty } from '../config/db.js';
 import { ApiError } from '../middleware/errorHandler.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 
-// GET /api/loyalty - Get all loyalty data (coins, quests, coupons)
-router.get('/', (req, res) => {
-  const email = req.user.email;
-  res.json({ success: true, data: db.loyalties[email] });
-});
+const router = express.Router();
 
-// PUT /api/loyalty/coins - Update coin balance
-router.put('/coins', (req, res, next) => {
+async function requireLoyalty(email, next) {
+  const loyalty = await getLoyalty(email);
+  if (!loyalty) {
+    next(new ApiError('Loyalty profile not found', 404));
+    return null;
+  }
+  return loyalty;
+}
+
+router.get('/', asyncHandler(async (req, res) => {
+  const loyalty = await getLoyalty(req.user.email);
+  res.json({ success: true, data: loyalty });
+}));
+
+router.put('/coins', asyncHandler(async (req, res, next) => {
   const { coins } = req.body;
   if (coins == null || isNaN(coins)) return next(new ApiError('Valid coins value required', 400));
 
-  const email = req.user.email;
-  db.loyalties[email].coins = parseInt(coins);
-  res.json({ success: true, data: db.loyalties[email], message: `Coins updated to ${db.loyalties[email].coins}` });
-});
+  const loyalty = await requireLoyalty(req.user.email, next);
+  if (!loyalty) return;
 
-// PUT /api/loyalty/coins/add - Add coins to balance
-router.put('/coins/add', (req, res, next) => {
+  loyalty.coins = parseInt(coins);
+  const data = await setLoyalty(req.user.email, loyalty);
+  res.json({ success: true, data, message: `Coins updated to ${data.coins}` });
+}));
+
+router.put('/coins/add', asyncHandler(async (req, res, next) => {
   const { amount } = req.body;
   if (!amount || isNaN(amount)) return next(new ApiError('Valid amount required', 400));
 
-  const email = req.user.email;
-  db.loyalties[email].coins += parseInt(amount);
-  res.json({ success: true, data: db.loyalties[email], message: `+${amount} coins awarded. Total: ${db.loyalties[email].coins}` });
-});
+  const loyalty = await requireLoyalty(req.user.email, next);
+  if (!loyalty) return;
 
-// PUT /api/loyalty/coins/spend - Spend coins
-router.put('/coins/spend', (req, res, next) => {
+  loyalty.coins += parseInt(amount);
+  const data = await setLoyalty(req.user.email, loyalty);
+  res.json({ success: true, data, message: `+${amount} coins awarded. Total: ${data.coins}` });
+}));
+
+router.put('/coins/spend', asyncHandler(async (req, res, next) => {
   const { amount } = req.body;
   if (!amount || isNaN(amount)) return next(new ApiError('Valid amount required', 400));
-  
-  const email = req.user.email;
-  if (db.loyalties[email].coins < parseInt(amount)) {
-    return next(new ApiError(`Insufficient coins. Available: ${db.loyalties[email].coins}`, 400));
+
+  const loyalty = await requireLoyalty(req.user.email, next);
+  if (!loyalty) return;
+
+  const coinAmount = parseInt(amount);
+  if (loyalty.coins < coinAmount) {
+    return next(new ApiError(`Insufficient coins. Available: ${loyalty.coins}`, 400));
   }
 
-  db.loyalties[email].coins -= parseInt(amount);
-  res.json({ success: true, data: db.loyalties[email], message: `Spent ${amount} coins. Remaining: ${db.loyalties[email].coins}` });
-});
+  loyalty.coins -= coinAmount;
+  const data = await setLoyalty(req.user.email, loyalty);
+  res.json({ success: true, data, message: `Spent ${amount} coins. Remaining: ${data.coins}` });
+}));
 
-// PUT /api/loyalty/quests/:questId/complete - Mark a quest as completable
-router.put('/quests/:questId/complete', (req, res, next) => {
-  const email = req.user.email;
-  const questIdx = db.loyalties[email].quests.findIndex(q => q.id === req.params.questId);
+router.put('/quests/:questId/complete', asyncHandler(async (req, res, next) => {
+  const loyalty = await requireLoyalty(req.user.email, next);
+  if (!loyalty) return;
+
+  const questIdx = loyalty.quests.findIndex((q) => q.id === req.params.questId);
   if (questIdx === -1) return next(new ApiError(`Quest '${req.params.questId}' not found`, 404));
 
-  const quest = db.loyalties[email].quests[questIdx];
+  const quest = loyalty.quests[questIdx];
   if (quest.status === 'claimed') {
-    return res.json({ success: true, data: db.loyalties[email], message: 'Quest already claimed' });
+    return res.json({ success: true, data: loyalty, message: 'Quest already claimed' });
   }
+
   if (quest.status === 'locked') {
-    db.loyalties[email].quests[questIdx] = {
+    loyalty.quests[questIdx] = {
       ...quest,
       status: 'completable',
       progressText: '1/1 completed - Reward available!'
     };
   }
 
-  res.json({ success: true, data: db.loyalties[email], message: `Quest '${quest.title}' is now completable` });
-});
+  const data = await setLoyalty(req.user.email, loyalty);
+  res.json({ success: true, data, message: `Quest '${quest.title}' is now completable` });
+}));
 
-// PUT /api/loyalty/quests/:questId/claim - Claim a quest reward
-router.put('/quests/:questId/claim', (req, res, next) => {
-  const email = req.user.email;
-  const questIdx = db.loyalties[email].quests.findIndex(q => q.id === req.params.questId);
+router.put('/quests/:questId/claim', asyncHandler(async (req, res, next) => {
+  const loyalty = await requireLoyalty(req.user.email, next);
+  if (!loyalty) return;
+
+  const questIdx = loyalty.quests.findIndex((q) => q.id === req.params.questId);
   if (questIdx === -1) return next(new ApiError(`Quest '${req.params.questId}' not found`, 404));
 
-  const quest = db.loyalties[email].quests[questIdx];
+  const quest = loyalty.quests[questIdx];
   if (quest.status !== 'completable') {
     return next(new ApiError(`Quest is not ready to claim. Status: ${quest.status}`, 400));
   }
 
-  // Award coins
-  db.loyalties[email].coins += quest.reward;
-  db.loyalties[email].quests[questIdx] = {
+  loyalty.coins += quest.reward;
+  loyalty.quests[questIdx] = {
     ...quest,
     status: 'claimed',
     progressText: `Claimed +${quest.reward} Coins!`
   };
 
+  const data = await setLoyalty(req.user.email, loyalty);
   res.json({
     success: true,
-    data: db.loyalties[email],
-    message: `Quest claimed! +${quest.reward} coins awarded. Total: ${db.loyalties[email].coins}`
+    data,
+    message: `Quest claimed! +${quest.reward} coins awarded. Total: ${data.coins}`
   });
-});
+}));
 
-// POST /api/loyalty/coupons - Unlock a coupon code
-router.post('/coupons', (req, res, next) => {
+router.post('/coupons', asyncHandler(async (req, res, next) => {
   const { code, cost } = req.body;
   if (!code) return next(new ApiError('Coupon code is required', 400));
 
-  const email = req.user.email;
-  if (db.loyalties[email].unlockedCoupons.includes(code)) {
+  const loyalty = await requireLoyalty(req.user.email, next);
+  if (!loyalty) return;
+
+  if (loyalty.unlockedCoupons.includes(code)) {
     return next(new ApiError(`Coupon '${code}' is already unlocked`, 409));
   }
 
-  // Deduct coin cost if provided
   if (cost) {
     const coinCost = parseInt(cost);
-    if (db.loyalties[email].coins < coinCost) {
-      return next(new ApiError(`Insufficient coins. Need ${coinCost}, have ${db.loyalties[email].coins}`, 400));
+    if (loyalty.coins < coinCost) {
+      return next(new ApiError(`Insufficient coins. Need ${coinCost}, have ${loyalty.coins}`, 400));
     }
-    db.loyalties[email].coins -= coinCost;
+    loyalty.coins -= coinCost;
   }
 
-  db.loyalties[email].unlockedCoupons.push(code);
-  res.status(201).json({
-    success: true,
-    data: db.loyalties[email],
-    message: `Coupon '${code}' unlocked successfully`
-  });
-});
+  loyalty.unlockedCoupons.push(code);
+  const data = await setLoyalty(req.user.email, loyalty);
+  res.status(201).json({ success: true, data, message: `Coupon '${code}' unlocked successfully` });
+}));
 
 export default router;

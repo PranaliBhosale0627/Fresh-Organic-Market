@@ -1,144 +1,105 @@
 import express from 'express';
-const router = express.Router();
-import { db } from '../config/db.js';
+import { ADMIN_EMAIL, collections, createDefaultLoyalty, withoutMongoId } from '../config/db.js';
 import { ApiError } from '../middleware/errorHandler.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 
-// POST /api/auth/register - Register a new customer
-router.post('/register', (req, res, next) => {
+const router = express.Router();
+
+function userResponse(customer, isAdmin = false) {
+  if (isAdmin) {
+    return { name: 'Verdant Admin', email: ADMIN_EMAIL, avatar: 'AD', isAdmin: true };
+  }
+
+  return {
+    name: customer.name,
+    email: customer.email,
+    avatar: customer.avatar,
+    isAdmin: false
+  };
+}
+
+router.post('/register', asyncHandler(async (req, res, next) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) {
     return next(new ApiError('Name, email, and password are required', 400));
   }
 
   const lowerEmail = email.toLowerCase();
-  const exists = db.customers.find(c => c.email.toLowerCase() === lowerEmail);
-  if (exists || lowerEmail === 'admin@harvest.com') {
+  const exists = await collections().customers.findOne({ email: lowerEmail });
+  if (exists || lowerEmail === ADMIN_EMAIL) {
     return next(new ApiError(`Account with email '${email}' already exists`, 409));
   }
 
-  // Create the new customer profile
   const newCustomer = {
     id: `cust-${Date.now()}`,
     name,
     email: lowerEmail,
-    avatar: name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2),
+    avatar: name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2),
     ordersCount: 0,
     joinDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
     status: 'Active'
   };
 
-  db.customers.push(newCustomer);
-  db.passwords[lowerEmail] = password;
-  db.carts[lowerEmail] = [];
-  db.loyalties[lowerEmail] = {
-    coins: 50, // 50 Welcome Coins!
-    unlockedCoupons: [],
-    quests: [
-      { id: 'quest-recipes', title: 'Farmhouse Cook Master', description: 'Gather and add all required fresh ingredients of any delicious organic meal from our cookbook.', reward: 50, status: 'locked', progressText: '0/1 added to cart' },
-      { id: 'quest-green', title: 'Carbon Neutral Delivery', description: 'Select an Eco-Consolidated delivery time slot at checkout to minimize last-mile transport emissions.', reward: 40, status: 'locked', progressText: '0/1 eco-slot selected' },
-      { id: 'quest-local', title: 'Sourced Locally Patron', description: 'Support regional family farms by ordering any heirloom cherry tomatoes or purpled cauliflowers.', reward: 35, status: 'completable', progressText: 'Complete! Ready to claim reward' }
-    ]
-  };
+  await Promise.all([
+    collections().customers.insertOne(newCustomer),
+    collections().accounts.insertOne({ email: lowerEmail, password, isAdmin: false }),
+    collections().carts.updateOne({ email: lowerEmail }, { $set: { email: lowerEmail, items: [] } }, { upsert: true }),
+    collections().loyalties.updateOne({ email: lowerEmail }, { $set: { email: lowerEmail, ...createDefaultLoyalty(50) } }, { upsert: true })
+  ]);
 
   res.status(201).json({
     success: true,
     token: lowerEmail,
-    user: {
-      name: newCustomer.name,
-      email: newCustomer.email,
-      avatar: newCustomer.avatar,
-      isAdmin: false
-    },
+    user: userResponse(newCustomer),
     message: 'Registration successful!'
   });
-});
+}));
 
-// POST /api/auth/login - Log in
-router.post('/login', (req, res, next) => {
+router.post('/login', asyncHandler(async (req, res, next) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return next(new ApiError('Email and password are required', 400));
   }
 
   const lowerEmail = email.toLowerCase();
-  
-  // Admin Login Handler
-  if (lowerEmail === 'admin@harvest.com') {
-    if (password === 'admin123') {
-      return res.json({
-        success: true,
-        token: lowerEmail,
-        user: {
-          name: 'Verdant Admin',
-          email: lowerEmail,
-          avatar: 'AD',
-          isAdmin: true
-        },
-        message: 'Admin login successful!'
-      });
-    } else {
-      return next(new ApiError('Invalid admin password', 401));
-    }
+  const account = await collections().accounts.findOne({ email: lowerEmail });
+
+  if (!account || account.password !== password) {
+    return next(new ApiError(lowerEmail === ADMIN_EMAIL ? 'Invalid admin password' : 'Incorrect email or password', 401));
   }
 
-  // Customer Login Handler
-  const customer = db.customers.find(c => c.email.toLowerCase() === lowerEmail);
-  if (!customer) {
-    return next(new ApiError('Account not found with this email', 404));
+  if (account.isAdmin) {
+    return res.json({
+      success: true,
+      token: lowerEmail,
+      user: userResponse(null, true),
+      message: 'Admin login successful!'
+    });
   }
 
+  const customer = await collections().customers.findOne({ email: lowerEmail });
+  if (!customer) return next(new ApiError('Account not found with this email', 404));
   if (customer.status === 'Blocked') {
     return next(new ApiError('Your account has been suspended. Please contact support.', 403));
-  }
-
-  const storedPassword = db.passwords[lowerEmail];
-  if (!storedPassword || storedPassword !== password) {
-    return next(new ApiError('Incorrect email or password', 401));
   }
 
   res.json({
     success: true,
     token: lowerEmail,
-    user: {
-      name: customer.name,
-      email: customer.email,
-      avatar: customer.avatar,
-      isAdmin: false
-    },
+    user: userResponse(withoutMongoId(customer)),
     message: 'Login successful!'
   });
-});
+}));
 
-// GET /api/auth/me - Verify active session from auth header
-router.get('/me', (req, res) => {
-  const email = req.user.email;
-  
-  if (email === 'admin@harvest.com') {
-    return res.json({
-      success: true,
-      user: {
-        name: 'Verdant Admin',
-        email,
-        avatar: 'AD',
-        isAdmin: true
-      }
-    });
+router.get('/me', asyncHandler(async (req, res) => {
+  if (req.user.email === ADMIN_EMAIL) {
+    return res.json({ success: true, user: userResponse(null, true) });
   }
 
-  const customer = db.customers.find(c => c.email.toLowerCase() === email);
-  if (!customer) {
-    return res.json({ success: false, user: null });
-  }
+  const customer = await collections().customers.findOne({ email: req.user.email });
+  if (!customer) return res.json({ success: false, user: null });
 
-  res.json({
-    success: true,
-    user: {
-      name: customer.name,
-      email: customer.email,
-      avatar: customer.avatar,
-      isAdmin: false
-    }
-  });
-});
+  res.json({ success: true, user: userResponse(withoutMongoId(customer)) });
+}));
 
 export default router;

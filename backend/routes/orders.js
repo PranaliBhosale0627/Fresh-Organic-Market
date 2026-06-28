@@ -1,42 +1,65 @@
 import express from 'express';
-const router = express.Router();
-import { db } from '../config/db.js';
+import { collections, getLoyalty, setCart, setLoyalty, withoutMongoId } from '../config/db.js';
 import { ApiError } from '../middleware/errorHandler.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 
-// GET /api/orders - Get all orders (isolated for customers, full list for admins)
-router.get('/', (req, res) => {
+const router = express.Router();
+
+router.get('/', asyncHandler(async (req, res) => {
   const { status, customerId } = req.query;
-  let orders = db.orders;
+  const query = {};
 
-  // Restrict orders to logged-in user unless Admin
   if (!req.user.isAdmin) {
-    orders = orders.filter(o => o.customerEmail.toLowerCase() === req.user.email.toLowerCase());
+    query.customerEmail = req.user.email;
   } else if (customerId) {
-    orders = orders.filter(o => o.customerId === customerId);
+    query.customerId = customerId;
   }
 
   if (status) {
-    orders = orders.filter(o => o.status.toLowerCase() === status.toLowerCase());
+    query.status = new RegExp(`^${status}$`, 'i');
   }
 
-  res.json({ success: true, data: orders, count: orders.length });
-});
+  const orders = await collections().orders.find(query).toArray();
+  const data = orders.map(withoutMongoId);
+  res.json({ success: true, data, count: data.length });
+}));
 
-// GET /api/orders/:id - Get single order
-router.get('/:id', (req, res, next) => {
-  const order = db.orders.find(o => o.id === req.params.id);
+router.get('/stats/summary', asyncHandler(async (req, res, next) => {
+  if (!req.user.isAdmin) {
+    return next(new ApiError('Unauthorized. Admin privilege required.', 403));
+  }
+
+  const orders = await collections().orders.find({}).toArray();
+  const revenue = orders.filter((o) => o.status === 'Delivered').reduce((sum, o) => sum + o.total, 0);
+  const byStatus = {
+    Pending: orders.filter((o) => o.status === 'Pending').length,
+    Processing: orders.filter((o) => o.status === 'Processing').length,
+    Shipped: orders.filter((o) => o.status === 'Shipped').length,
+    Delivered: orders.filter((o) => o.status === 'Delivered').length
+  };
+
+  res.json({
+    success: true,
+    data: {
+      totalOrders: orders.length,
+      totalRevenue: parseFloat(revenue.toFixed(2)),
+      byStatus
+    }
+  });
+}));
+
+router.get('/:id', asyncHandler(async (req, res, next) => {
+  const order = await collections().orders.findOne({ id: req.params.id });
   if (!order) return next(new ApiError(`Order '${req.params.id}' not found`, 404));
 
-  // Isolate customer orders unless Admin
-  if (!req.user.isAdmin && order.customerEmail.toLowerCase() !== req.user.email.toLowerCase()) {
+  if (!req.user.isAdmin && order.customerEmail.toLowerCase() !== req.user.email) {
     return next(new ApiError('Unauthorized to view this order', 403));
   }
 
-  res.json({ success: true, data: order });
-});
+  res.json({ success: true, data: withoutMongoId(order) });
+}));
 
-// POST /api/orders - Place a new order
-router.post('/', (req, res, next) => {
+router.post('/', asyncHandler(async (req, res, next) => {
   const { cartItems, address, deliveryTimeSlot, paymentMethod, appliedDiscount = 0 } = req.body;
   const user = req.user;
 
@@ -47,16 +70,14 @@ router.post('/', (req, res, next) => {
     return next(new ApiError('address, deliveryTimeSlot, and paymentMethod are required', 400));
   }
 
-  // Validate stock for each item
   for (const item of cartItems) {
-    const product = db.products.find(p => p.id === item.product.id);
+    const product = await collections().products.findOne({ id: item.product.id });
     if (!product) return next(new ApiError(`Product '${item.product.id}' not found`, 404));
     if (product.stock < item.quantity) {
       return next(new ApiError(`Insufficient stock for '${product.name}'. Available: ${product.stock}`, 400));
     }
   }
 
-  // Compute totals
   const subtotal = cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
   const deliveryFee = deliveryTimeSlot.includes('Eco-Consolidated') ? 0 : (subtotal > 30 ? 0 : 2.99);
   const tax = subtotal * 0.08;
@@ -66,7 +87,6 @@ router.post('/', (req, res, next) => {
   const now = new Date();
   const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
   const customerName = user.customer ? user.customer.name : 'Anonymous Customer';
   const customerAvatar = user.customer ? user.customer.avatar : 'AC';
 
@@ -76,7 +96,7 @@ router.post('/', (req, res, next) => {
     customerEmail: user.email,
     customerAvatar,
     date: dateStr,
-    items: cartItems.map(item => ({
+    items: cartItems.map((item) => ({
       productId: item.product.id,
       productName: item.product.name,
       quantity: item.quantity,
@@ -99,40 +119,38 @@ router.post('/', (req, res, next) => {
     ]
   };
 
-  // Deduct stock from products
   for (const item of cartItems) {
-    const productIdx = db.products.findIndex(p => p.id === item.product.id);
-    db.products[productIdx].stock = Math.max(0, db.products[productIdx].stock - item.quantity);
+    await collections().products.updateOne(
+      { id: item.product.id },
+      { $inc: { stock: -Math.abs(parseInt(item.quantity)) } }
+    );
   }
 
-  // Update customer order count
-  const customerIdx = db.customers.findIndex(c => c.email.toLowerCase() === user.email.toLowerCase());
-  if (customerIdx !== -1) {
-    db.customers[customerIdx].ordersCount += 1;
-  }
+  await collections().customers.updateOne(
+    { email: user.email },
+    { $inc: { ordersCount: 1 } }
+  );
 
-  // Award eco coins if eco delivery was selected
-  if (deliveryTimeSlot.includes('Eco-Consolidated') && db.loyalties[user.email]) {
-    db.loyalties[user.email].coins += 20;
-    // Complete the eco quest if not already done
-    const questIdx = db.loyalties[user.email].quests.findIndex(q => q.id === 'quest-green');
-    if (questIdx !== -1 && db.loyalties[user.email].quests[questIdx].status === 'locked') {
-      db.loyalties[user.email].quests[questIdx].status = 'completable';
-      db.loyalties[user.email].quests[questIdx].progressText = '1/1 eco-slot selected - Reward available!';
+  if (deliveryTimeSlot.includes('Eco-Consolidated')) {
+    const loyalty = await getLoyalty(user.email);
+    if (loyalty) {
+      loyalty.coins += 20;
+      const questIdx = loyalty.quests.findIndex((q) => q.id === 'quest-green');
+      if (questIdx !== -1 && loyalty.quests[questIdx].status === 'locked') {
+        loyalty.quests[questIdx].status = 'completable';
+        loyalty.quests[questIdx].progressText = '1/1 eco-slot selected - Reward available!';
+      }
+      await setLoyalty(user.email, loyalty);
     }
   }
 
-  // Prepend to orders list (newest first)
-  db.orders.unshift(newOrder);
-
-  // Clear the user's cart
-  db.carts[user.email] = [];
+  await collections().orders.insertOne(newOrder);
+  await setCart(user.email, []);
 
   res.status(201).json({ success: true, data: newOrder, message: 'Order placed successfully' });
-});
+}));
 
-// PUT /api/orders/:id/status - Update order status (Admin only)
-router.put('/:id/status', (req, res, next) => {
+router.put('/:id/status', asyncHandler(async (req, res, next) => {
   if (!req.user.isAdmin) {
     return next(new ApiError('Unauthorized. Admin privilege required.', 403));
   }
@@ -143,14 +161,11 @@ router.put('/:id/status', (req, res, next) => {
     return next(new ApiError(`Invalid status. Must be one of: ${validStatuses.join(', ')}`, 400));
   }
 
-  const idx = db.orders.findIndex(o => o.id === req.params.id);
-  if (idx === -1) return next(new ApiError(`Order '${req.params.id}' not found`, 404));
+  const order = await collections().orders.findOne({ id: req.params.id });
+  if (!order) return next(new ApiError(`Order '${req.params.id}' not found`, 404));
 
   const timeStr = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  const order = db.orders[idx];
-
-  // Update timeline based on new status
-  const updatedTimeline = order.timeline.map(step => {
+  const updatedTimeline = order.timeline.map((step) => {
     if (status === 'Processing' && step.stage === 'Packed') {
       return { ...step, time: timeStr, completed: true };
     }
@@ -165,33 +180,12 @@ router.put('/:id/status', (req, res, next) => {
     return step;
   });
 
-  db.orders[idx] = { ...order, status, timeline: updatedTimeline };
-  res.json({ success: true, data: db.orders[idx], message: `Order status updated to '${status}'` });
-});
-
-// GET /api/orders/stats/summary - Dashboard stats (Admin only)
-router.get('/stats/summary', (req, res, next) => {
-  if (!req.user.isAdmin) {
-    return next(new ApiError('Unauthorized. Admin privilege required.', 403));
-  }
-
-  const orders = db.orders;
-  const revenue = orders.filter(o => o.status === 'Delivered').reduce((sum, o) => sum + o.total, 0);
-  const byStatus = {
-    Pending: orders.filter(o => o.status === 'Pending').length,
-    Processing: orders.filter(o => o.status === 'Processing').length,
-    Shipped: orders.filter(o => o.status === 'Shipped').length,
-    Delivered: orders.filter(o => o.status === 'Delivered').length,
-  };
-
+  await collections().orders.updateOne({ id: req.params.id }, { $set: { status, timeline: updatedTimeline } });
   res.json({
     success: true,
-    data: {
-      totalOrders: orders.length,
-      totalRevenue: parseFloat(revenue.toFixed(2)),
-      byStatus
-    }
+    data: { ...withoutMongoId(order), status, timeline: updatedTimeline },
+    message: `Order status updated to '${status}'`
   });
-});
+}));
 
 export default router;

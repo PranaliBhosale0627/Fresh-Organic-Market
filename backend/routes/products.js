@@ -1,50 +1,47 @@
 import express from 'express';
-const router = express.Router();
-import { db } from '../config/db.js';
+import { collections, withoutMongoId } from '../config/db.js';
 import { ApiError } from '../middleware/errorHandler.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 
-// GET /api/products - Get all products (optional ?category= filter)
-router.get('/', (req, res) => {
+const router = express.Router();
+
+router.get('/', asyncHandler(async (req, res) => {
   const { category, search } = req.query;
-  let products = db.products;
+  const query = {};
 
   if (category && category !== 'All Products') {
-    products = products.filter(p => p.category.toLowerCase() === category.toLowerCase());
+    query.category = new RegExp(`^${category}$`, 'i');
   }
 
   if (search) {
-    const q = search.toLowerCase();
-    products = products.filter(p =>
-      p.name.toLowerCase().includes(q) ||
-      p.category.toLowerCase().includes(q) ||
-      (p.tag && p.tag.toLowerCase().includes(q))
-    );
+    const q = new RegExp(search, 'i');
+    query.$or = [{ name: q }, { category: q }, { tag: q }];
   }
 
-  res.json({ success: true, data: products, count: products.length });
-});
+  const products = await collections().products.find(query).toArray();
+  const data = products.map(withoutMongoId);
+  res.json({ success: true, data, count: data.length });
+}));
 
-// GET /api/products/categories - Get distinct categories
-router.get('/categories', (req, res) => {
-  const categories = [...new Set(db.products.map(p => p.category))];
+router.get('/categories', asyncHandler(async (req, res) => {
+  const categories = await collections().products.distinct('category');
   res.json({ success: true, data: categories });
-});
+}));
 
-// GET /api/products/:id - Get a single product
-router.get('/:id', (req, res, next) => {
-  const product = db.products.find(p => p.id === req.params.id);
+router.get('/:id', asyncHandler(async (req, res, next) => {
+  const product = await collections().products.findOne({ id: req.params.id });
   if (!product) return next(new ApiError(`Product with id '${req.params.id}' not found`, 404));
-  res.json({ success: true, data: product });
-});
+  res.json({ success: true, data: withoutMongoId(product) });
+}));
 
-// POST /api/products - Add a new product (Admin)
-router.post('/', (req, res, next) => {
+router.post('/', asyncHandler(async (req, res, next) => {
   const { name, category, price, unit, image, stock, maxStock, description } = req.body;
-  if (!name || !category || price == null || !unit || !stock || !description) {
+  if (!name || !category || price == null || !unit || stock == null || !description) {
     return next(new ApiError('Missing required fields: name, category, price, unit, stock, description', 400));
   }
 
   const newProduct = {
+    ...req.body,
     id: `prod-${Date.now()}`,
     name,
     category,
@@ -53,55 +50,57 @@ router.post('/', (req, res, next) => {
     image: image || '',
     stock: parseInt(stock),
     maxStock: parseInt(maxStock) || parseInt(stock),
-    description,
-    ...req.body
+    description
   };
 
-  db.products.push(newProduct);
+  await collections().products.insertOne(newProduct);
   res.status(201).json({ success: true, data: newProduct, message: 'Product added successfully' });
-});
+}));
 
-// PUT /api/products/:id - Update a product fully
-router.put('/:id', (req, res, next) => {
-  const idx = db.products.findIndex(p => p.id === req.params.id);
-  if (idx === -1) return next(new ApiError(`Product '${req.params.id}' not found`, 404));
+router.put('/:id', asyncHandler(async (req, res, next) => {
+  const result = await collections().products.findOneAndUpdate(
+    { id: req.params.id },
+    { $set: { ...req.body, id: req.params.id } },
+    { returnDocument: 'after' }
+  );
 
-  db.products[idx] = { ...db.products[idx], ...req.body, id: req.params.id };
-  res.json({ success: true, data: db.products[idx], message: 'Product updated' });
-});
+  if (!result) return next(new ApiError(`Product '${req.params.id}' not found`, 404));
+  res.json({ success: true, data: withoutMongoId(result), message: 'Product updated' });
+}));
 
-// PUT /api/products/:id/restock - Restock product by quantity
-router.put('/:id/restock', (req, res, next) => {
+router.put('/:id/restock', asyncHandler(async (req, res, next) => {
   const { quantity = 50 } = req.body;
-  const idx = db.products.findIndex(p => p.id === req.params.id);
-  if (idx === -1) return next(new ApiError(`Product '${req.params.id}' not found`, 404));
+  const product = await collections().products.findOne({ id: req.params.id });
+  if (!product) return next(new ApiError(`Product '${req.params.id}' not found`, 404));
 
-  const product = db.products[idx];
   const newStock = Math.min(product.maxStock, product.stock + parseInt(quantity));
-  db.products[idx] = { ...product, stock: newStock };
+  await collections().products.updateOne({ id: req.params.id }, { $set: { stock: newStock } });
 
-  res.json({ success: true, data: db.products[idx], message: `Restocked ${quantity} units. New stock: ${newStock}` });
-});
+  res.json({
+    success: true,
+    data: { ...withoutMongoId(product), stock: newStock },
+    message: `Restocked ${quantity} units. New stock: ${newStock}`
+  });
+}));
 
-// PUT /api/products/:id/price - Update price only
-router.put('/:id/price', (req, res, next) => {
+router.put('/:id/price', asyncHandler(async (req, res, next) => {
   const { price } = req.body;
   if (price == null || isNaN(price)) return next(new ApiError('Valid price is required', 400));
 
-  const idx = db.products.findIndex(p => p.id === req.params.id);
-  if (idx === -1) return next(new ApiError(`Product '${req.params.id}' not found`, 404));
+  const result = await collections().products.findOneAndUpdate(
+    { id: req.params.id },
+    { $set: { price: parseFloat(price) } },
+    { returnDocument: 'after' }
+  );
 
-  db.products[idx] = { ...db.products[idx], price: parseFloat(price) };
-  res.json({ success: true, data: db.products[idx], message: 'Price updated' });
-});
+  if (!result) return next(new ApiError(`Product '${req.params.id}' not found`, 404));
+  res.json({ success: true, data: withoutMongoId(result), message: 'Price updated' });
+}));
 
-// DELETE /api/products/:id - Delete a product (Admin)
-router.delete('/:id', (req, res, next) => {
-  const idx = db.products.findIndex(p => p.id === req.params.id);
-  if (idx === -1) return next(new ApiError(`Product '${req.params.id}' not found`, 404));
-
-  db.products.splice(idx, 1);
+router.delete('/:id', asyncHandler(async (req, res, next) => {
+  const result = await collections().products.deleteOne({ id: req.params.id });
+  if (result.deletedCount === 0) return next(new ApiError(`Product '${req.params.id}' not found`, 404));
   res.json({ success: true, message: `Product '${req.params.id}' deleted successfully` });
-});
+}));
 
 export default router;

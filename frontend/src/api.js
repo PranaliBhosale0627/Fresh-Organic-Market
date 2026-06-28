@@ -6,7 +6,8 @@
  * so no CORS issues during development.
  */
 
-const BASE_URL = '/api';
+const API_ROOT = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const BASE_URL = API_ROOT ? `${API_ROOT}/api` : '/api';
 
 // ─── Token Management ─────────────────────────────────────────────────────────
 
