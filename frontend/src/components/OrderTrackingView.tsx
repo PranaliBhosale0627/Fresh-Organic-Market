@@ -13,7 +13,7 @@ const deliveryStages = [
   'Assigned to Delivery Partner',
   'Picked Up',
   'Out for Delivery',
-  'Reached Destination',
+  'Near Your Location',
   'Delivered',
 ];
 
@@ -48,6 +48,9 @@ export default function OrderTrackingView({ order, onNavigate }: OrderTrackingVi
             <h2 className="font-headline-md text-xl font-bold text-primary-fixed">Order confirmed</h2>
             <p className="mt-1 text-sm leading-relaxed text-primary-fixed/90">
               Estimated arrival: <strong className="text-white">{order.estimatedDeliveryTime || order.deliveryTimeSlot}</strong>
+            </p>
+            <p className="mt-1 text-xs font-bold text-primary-fixed/80">
+              Payment: {order.paymentMethod} - {order.paymentStatus || 'Pending'}
             </p>
           </div>
         </div>
@@ -84,6 +87,18 @@ export default function OrderTrackingView({ order, onNavigate }: OrderTrackingVi
               <span className="mt-1 rounded-full bg-secondary px-3 py-1 text-[9px] font-black text-white shadow">
                 {order.deliveryStatus || 'Preparing'}
               </span>
+            </div>
+
+            <div className="absolute right-8 top-8 max-w-[220px] rounded-2xl border border-outline-variant/25 bg-white/95 p-3 text-xs shadow">
+              <p className="font-black text-primary">Live delivery location</p>
+              <p className="mt-1 font-semibold text-on-surface-variant">
+                {order.liveLocation?.address || (
+                  order.liveLocation?.lat && order.liveLocation?.lng
+                    ? `${order.liveLocation.lat.toFixed(4)}, ${order.liveLocation.lng.toFixed(4)}`
+                    : 'Waiting for delivery partner update'
+                )}
+              </p>
+              <p className="mt-1 font-bold text-secondary">ETA: {order.estimatedDeliveryTime || 'Calculating'}</p>
             </div>
 
             <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between rounded-2xl border border-outline-variant/30 bg-white/95 p-4 shadow-lg backdrop-blur-sm">

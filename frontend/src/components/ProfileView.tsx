@@ -188,6 +188,9 @@ export default function ProfileView({
       `Email: ${order.customerEmail}`,
       `Date: ${order.date}`,
       `Status: ${order.status}`,
+      `Delivery Status: ${order.deliveryStatus || 'Unassigned'}`,
+      `Payment Method: ${order.paymentMethod}`,
+      `Payment Status: ${order.paymentStatus || 'Pending'}`,
       '',
       ...order.items.map((item) => `${item.productName} x ${item.quantity} - ${currency.format(item.price * item.quantity)}`),
       '',
@@ -493,6 +496,8 @@ function OrderRow({
         <div>
           <p className="text-sm font-black text-primary">{order.id}</p>
           <p className="mt-1 text-xs font-semibold text-on-surface-variant">{order.date} - {order.items.length} items</p>
+          <p className="mt-1 text-[11px] font-bold text-secondary">Delivery: {order.deliveryStatus || 'Unassigned'}</p>
+          <p className="mt-1 text-[11px] font-bold text-primary">Payment: {order.paymentMethod} - {order.paymentStatus || 'Pending'}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[10px] font-black uppercase text-primary">{order.status}</span>

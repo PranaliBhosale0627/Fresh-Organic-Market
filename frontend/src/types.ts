@@ -49,14 +49,20 @@ export interface Order {
   discount: number;
   total: number;
   status: 'Pending' | 'Confirmed' | 'Packed' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
-  paymentStatus?: 'Pending' | 'Paid' | 'Failed' | 'Refunded';
+  paymentStatus?: 'Pending' | 'Pending Collection' | 'Paid' | 'Failed' | 'Refunded' | 'Collected';
   address: string;
   deliveryTimeSlot: string;
   paymentMethod: string;
-  deliveryStatus?: 'Unassigned' | 'Assigned' | 'Accepted' | 'Picked Up' | 'Out for Delivery' | 'Reached Destination' | 'Delivered' | 'Rejected';
+  deliveryStatus?: 'Unassigned' | 'Assigned' | 'Accepted' | 'Picked Up' | 'Out for Delivery' | 'Near Your Location' | 'Delivered' | 'Delivery Failed' | 'Rejected';
   assignedPartner?: DeliveryPartnerSummary | null;
   estimatedDeliveryTime?: string | null;
   deliveryOtpCode?: string | null;
+  liveLocation?: {
+    lat?: number;
+    lng?: number;
+    address?: string;
+    updatedAt: string;
+  } | null;
   deliveryHistory?: {
     status: string;
     changedAt: string;

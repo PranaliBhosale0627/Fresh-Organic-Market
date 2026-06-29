@@ -265,6 +265,7 @@ export default function AdminDashboard({
                   <tr>
                     <th className="px-4 py-3">Order</th>
                     <th className="px-4 py-3">Customer</th>
+                    <th className="px-4 py-3">Delivery Partner</th>
                     <th className="px-4 py-3">Date</th>
                     <th className="px-4 py-3">Total</th>
                     <th className="px-4 py-3">Status</th>
@@ -278,6 +279,10 @@ export default function AdminDashboard({
                       <td className="px-4 py-3">
                         <p className="font-bold">{order.customerName}</p>
                         <p className={darkMode ? 'text-white/45' : 'text-on-surface-variant'}>{order.customerEmail}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-bold">{order.assignedPartner?.name || 'Unassigned'}</p>
+                        <p className={darkMode ? 'text-white/45' : 'text-on-surface-variant'}>{order.deliveryStatus || 'Unassigned'}</p>
                       </td>
                       <td className="px-4 py-3">{order.date}</td>
                       <td className="px-4 py-3 font-bold">{currency.format(order.total)}</td>

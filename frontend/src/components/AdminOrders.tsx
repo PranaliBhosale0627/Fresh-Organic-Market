@@ -121,6 +121,12 @@ export default function AdminOrders({
                       <div>
                         <h4 className="font-bold text-xs text-on-surface leading-tight">{o.customerName}</h4>
                         <p className="text-[10px] text-on-surface-variant mt-0.5">{o.items.length} items • {o.date}</p>
+                        <p className="text-[10px] text-primary font-bold mt-1">
+                          {o.assignedPartner ? `Partner: ${o.assignedPartner.name}` : 'No delivery partner assigned'}
+                        </p>
+                        <p className="text-[10px] text-secondary font-bold mt-0.5">
+                          Delivery: {o.deliveryStatus || 'Unassigned'}
+                        </p>
                       </div>
                       <span className="font-bold text-xs text-on-surface">${o.total.toFixed(2)}</span>
                     </div>
@@ -142,7 +148,9 @@ export default function AdminOrders({
                     <span className="font-bold text-lg text-primary">{selectedOrder.id}</span>
                     <span className="text-xs text-on-surface-variant font-medium">({selectedOrder.date})</span>
                   </div>
-                  <p className="text-[11px] text-on-surface-variant font-medium mt-0.5">Secure payment via {selectedOrder.paymentMethod}</p>
+                  <p className="text-[11px] text-on-surface-variant font-medium mt-0.5">
+                    Payment: {selectedOrder.paymentMethod} - {selectedOrder.paymentStatus || 'Pending'}
+                  </p>
                 </div>
 
                 <div className="flex gap-2">
@@ -152,6 +160,35 @@ export default function AdminOrders({
                   >
                     <Printer className="w-4 h-4" /> Print Invoice
                   </button>
+                </div>
+              </div>
+
+              {/* Delivery Partner Controller */}
+              <div className="bg-secondary/5 border border-secondary/10 rounded-2xl p-5 space-y-3">
+                <p className="font-bold text-xs text-secondary uppercase tracking-wider leading-none">Delivery Partner & Live Tracking</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <p className="text-on-surface-variant font-bold uppercase text-[10px]">Assigned Partner</p>
+                    <p className="font-bold text-on-surface mt-1">
+                      {selectedOrder.assignedPartner ? `${selectedOrder.assignedPartner.name} (${selectedOrder.assignedPartner.phone})` : 'Not assigned'}
+                    </p>
+                    {selectedOrder.assignedPartner && (
+                      <p className="text-on-surface-variant mt-1">
+                        {selectedOrder.assignedPartner.vehicleType} - {selectedOrder.assignedPartner.vehicleNumber}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-on-surface-variant font-bold uppercase text-[10px]">Live Location</p>
+                    <p className="font-bold text-on-surface mt-1">
+                      {selectedOrder.liveLocation?.address || (
+                        selectedOrder.liveLocation?.lat && selectedOrder.liveLocation?.lng
+                          ? `${selectedOrder.liveLocation.lat.toFixed(4)}, ${selectedOrder.liveLocation.lng.toFixed(4)}`
+                          : 'Waiting for partner location'
+                      )}
+                    </p>
+                    <p className="text-on-surface-variant mt-1">ETA: {selectedOrder.estimatedDeliveryTime || 'Not available'}</p>
+                  </div>
                 </div>
               </div>
 

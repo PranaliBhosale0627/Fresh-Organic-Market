@@ -15,6 +15,9 @@ export default function AdminDeliveryPartners({ orders, onOrdersUpdated }: Admin
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [selectedPartnerId, setSelectedPartnerId] = useState('');
   const [form, setForm] = useState({ name: '', email: '', phone: '', vehicleType: '', vehicleNumber: '', password: 'partner123' });
+  const [busy, setBusy] = useState('');
+  const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
 
   const load = async () => {
     const [partnersRes, analyticsRes] = await Promise.all([
@@ -33,12 +36,25 @@ export default function AdminDeliveryPartners({ orders, onOrdersUpdated }: Admin
     () => orders.filter((order) => order.status !== 'Delivered' && order.status !== 'Cancelled'),
     [orders]
   );
+  const ongoingDeliveries = useMemo(
+    () => orders.filter((order) => order.assignedPartner && order.status !== 'Delivered' && order.status !== 'Cancelled'),
+    [orders]
+  );
 
   const createPartner = async (event: React.FormEvent) => {
     event.preventDefault();
-    await deliveryPartnersApi.create(form);
-    setForm({ name: '', email: '', phone: '', vehicleType: '', vehicleNumber: '', password: 'partner123' });
-    await load();
+    try {
+      setBusy('create');
+      setError('');
+      await deliveryPartnersApi.create(form);
+      setSuccess('Delivery partner created successfully');
+      setForm({ name: '', email: '', phone: '', vehicleType: '', vehicleNumber: '', password: 'partner123' });
+      await load();
+    } catch (err: any) {
+      setError(err.message || 'Unable to create partner');
+    } finally {
+      setBusy('');
+    }
   };
 
   const togglePartner = async (partner: DeliveryPartner) => {
@@ -56,9 +72,20 @@ export default function AdminDeliveryPartners({ orders, onOrdersUpdated }: Admin
 
   const assignOrder = async () => {
     if (!selectedOrderId || !selectedPartnerId) return;
-    const res = await deliveryPartnersApi.assign(selectedOrderId, selectedPartnerId, '30-40 minutes');
-    onOrdersUpdated(orders.map((order) => (order.id === res.data.id ? res.data : order)));
-    await load();
+    try {
+      setBusy('assign');
+      setError('');
+      const res = await deliveryPartnersApi.assign(selectedOrderId, selectedPartnerId, '30-40 minutes');
+      onOrdersUpdated(orders.map((order) => (order.id === res.data.id ? res.data : order)));
+      setSuccess(res.message || 'Delivery Partner Assigned Successfully');
+      setSelectedOrderId('');
+      setSelectedPartnerId('');
+      await load();
+    } catch (err: any) {
+      setError(err.message || 'Unable to assign delivery partner');
+    } finally {
+      setBusy('');
+    }
   };
 
   return (
@@ -68,6 +95,9 @@ export default function AdminDeliveryPartners({ orders, onOrdersUpdated }: Admin
         <h1 className="font-display text-3xl font-black text-on-surface">Delivery Partner Management</h1>
         <p className="mt-1 text-sm text-on-surface-variant">Add partners, assign orders, monitor performance, and manage availability.</p>
       </div>
+
+      {success && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-black text-emerald-800">{success}</div>}
+      {error && <div className="rounded-2xl border border-error/20 bg-error-container p-4 text-xs font-bold text-on-error-container">{error}</div>}
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <Metric label="Completed" value={analytics?.completedDeliveries || 0} />
@@ -99,8 +129,8 @@ export default function AdminDeliveryPartners({ orders, onOrdersUpdated }: Admin
                 className="w-full rounded-2xl border border-outline-variant/40 bg-surface-container-low px-4 py-3 text-xs font-bold outline-none focus:border-primary"
               />
             ))}
-            <button className="w-full rounded-2xl bg-primary px-5 py-3 text-xs font-black uppercase tracking-wider text-white">
-              Create Partner
+            <button disabled={busy === 'create'} className="w-full rounded-2xl bg-primary px-5 py-3 text-xs font-black uppercase tracking-wider text-white disabled:opacity-60">
+              {busy === 'create' ? 'Creating...' : 'Create Partner'}
             </button>
           </div>
         </form>
@@ -171,9 +201,41 @@ export default function AdminDeliveryPartners({ orders, onOrdersUpdated }: Admin
               <option key={partner.id} value={partner.id}>{partner.name} - {partner.availability}</option>
             ))}
           </select>
-          <button onClick={assignOrder} className="rounded-2xl bg-primary px-6 py-3 text-xs font-black uppercase text-white">
-            Assign
+          <button onClick={assignOrder} disabled={busy === 'assign'} className="rounded-2xl bg-primary px-6 py-3 text-xs font-black uppercase text-white disabled:opacity-60">
+            {busy === 'assign' ? 'Assigning...' : 'Assign'}
           </button>
+        </div>
+      </section>
+
+      <section className="rounded-[32px] border border-outline-variant/30 bg-white p-6 shadow-sm">
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-black text-primary">
+          <Bike className="h-5 w-5" /> Live Delivery Monitor
+        </h2>
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          {ongoingDeliveries.map((order) => (
+            <div key={order.id} className="rounded-3xl border border-outline-variant/25 bg-surface-container-low p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-black text-primary">{order.id}</p>
+                  <p className="mt-1 text-xs font-bold text-on-surface">{order.assignedPartner?.name}</p>
+                  <p className="mt-1 text-[11px] font-semibold text-on-surface-variant">{order.deliveryStatus || 'Assigned'} - ETA {order.estimatedDeliveryTime || 'N/A'}</p>
+                </div>
+                <span className="rounded-full bg-secondary/10 px-2 py-1 text-[10px] font-black text-secondary">{order.paymentMethod}</span>
+              </div>
+              <div className="mt-3 rounded-2xl bg-white p-3 text-xs font-semibold text-on-surface-variant">
+                Location: {order.liveLocation?.address || (
+                  order.liveLocation?.lat && order.liveLocation?.lng
+                    ? `${order.liveLocation.lat.toFixed(4)}, ${order.liveLocation.lng.toFixed(4)}`
+                    : 'Waiting for location update'
+                )}
+              </div>
+            </div>
+          ))}
+          {ongoingDeliveries.length === 0 && (
+            <p className="rounded-3xl border border-dashed border-outline-variant/40 p-8 text-center text-sm font-bold text-on-surface-variant">
+              No ongoing deliveries right now.
+            </p>
+          )}
         </div>
       </section>
     </div>

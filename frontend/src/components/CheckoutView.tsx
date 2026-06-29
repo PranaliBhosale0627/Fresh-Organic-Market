@@ -3,7 +3,7 @@ import { ArrowLeft, MapPin, Clock, CreditCard, ShieldCheck, Landmark, Leaf, Tick
 
 interface CheckoutViewProps {
   onNavigate: (view: string) => void;
-  onPlaceOrder: (details: { address: string; slot: string; payment: string; earnedCoins?: number }) => void;
+  onPlaceOrder: (details: { address: string; slot: string; payment: string; earnedCoins?: number }) => void | Promise<void>;
   unlockedCoupons?: string[];
 }
 
@@ -24,6 +24,7 @@ export default function CheckoutView({
   const [selectedPayment, setSelectedPayment] = useState('Credit Card');
   const [address, setAddress] = useState('452 Organic Meadows Lane, Culinary District, SF 94103');
   const [selectedCoupon, setSelectedCoupon] = useState<string>('');
+  const [placingOrder, setPlacingOrder] = useState(false);
 
   // Re-calculate pricing dynamically based on coupon selection
   const subtotal = initialSubtotal;
@@ -47,7 +48,9 @@ export default function CheckoutView({
   const tax = subtotal * 0.08;
   const total = Math.max(0, subtotal - discount + deliveryFee + tax);
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
+    if (placingOrder) return;
+    setPlacingOrder(true);
     // Check if slot chosen is Eco-Consolidated
     const isEcoSlot = selectedSlot.includes('Eco-Consolidated');
     const earnedCoins = isEcoSlot ? 20 : 0;
@@ -61,12 +64,16 @@ export default function CheckoutView({
       localStorage.setItem('checkout_discount_code', discountCode);
     }
 
-    onPlaceOrder({
-      address,
-      slot: selectedSlot,
-      payment: selectedPayment,
-      earnedCoins
-    });
+    try {
+      await onPlaceOrder({
+        address,
+        slot: selectedSlot,
+        payment: selectedPayment,
+        earnedCoins
+      });
+    } finally {
+      setPlacingOrder(false);
+    }
   };
 
   return (
@@ -292,6 +299,29 @@ export default function CheckoutView({
                   <Landmark className="w-5 h-5 text-on-surface-variant" />
                 </div>
               </label>
+
+              {/* Cash on Delivery */}
+              <label
+                onClick={() => setSelectedPayment('Cash on Delivery')}
+                className={`flex items-center p-4 border rounded-xl cursor-pointer hover:bg-surface-container-low transition-all active:scale-[0.99] group ${
+                  selectedPayment === 'Cash on Delivery' ? 'border-2 border-primary bg-primary-fixed-dim/10' : 'border-outline-variant'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="payment"
+                  checked={selectedPayment === 'Cash on Delivery'}
+                  onChange={() => {}}
+                  className="rounded-full border-outline-variant text-primary focus:ring-primary h-4.5 w-4.5 mr-4"
+                />
+                <div className="flex items-center justify-between w-full text-left">
+                  <div>
+                    <p className="text-sm font-bold text-on-surface">Cash on Delivery</p>
+                    <p className="text-[11px] text-on-surface-variant font-medium">Pay cash after receiving your order</p>
+                  </div>
+                  <Landmark className="w-5 h-5 text-on-surface-variant" />
+                </div>
+              </label>
             </div>
           </section>
         </div>
@@ -371,9 +401,10 @@ export default function CheckoutView({
             <div className="space-y-3 pt-2">
               <button
                 onClick={handlePlaceOrder}
-                className="w-full bg-primary text-on-primary py-4 rounded-full font-bold text-sm hover:bg-primary-container hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/25 transition-all shadow-md active:scale-95 duration-150 border border-primary/20"
+                disabled={placingOrder}
+                className="w-full bg-primary text-on-primary py-4 rounded-full font-bold text-sm hover:bg-primary-container hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/25 transition-all shadow-md active:scale-95 duration-150 border border-primary/20 disabled:opacity-60"
               >
-                Place Order
+                {placingOrder ? 'Placing Order...' : 'Place Order'}
               </button>
               <p className="text-center text-[10px] text-on-surface-variant leading-relaxed px-2 font-medium">
                 By placing an order, you agree to our Terms of Service.

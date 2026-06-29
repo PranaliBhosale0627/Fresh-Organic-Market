@@ -217,7 +217,9 @@ export default function App() {
         const exists = prev.some(o => o.id === order.id);
         return exists ? prev.map(o => o.id === order.id ? order : o) : [order, ...prev];
       });
-      setNotifications(prev => [`Delivery assigned: ${order.id}`, ...prev].slice(0, 25));
+      setActiveTrackingOrder(prev => prev?.id === order.id ? order : prev);
+      setSelectedOrderForInspection(prev => prev?.id === order.id ? order : prev);
+      setNotifications(prev => [`Delivery Partner Assigned Successfully: ${order.assignedPartner?.name || order.id}`, ...prev].slice(0, 25));
     });
 
     socket.on('delivery:updated', (order: Order) => {
@@ -226,7 +228,18 @@ export default function App() {
         return exists ? prev.map(o => o.id === order.id ? order : o) : [order, ...prev];
       });
       setActiveTrackingOrder(prev => prev?.id === order.id ? order : prev);
+      setSelectedOrderForInspection(prev => prev?.id === order.id ? order : prev);
       setNotifications(prev => [`Delivery update: ${order.id} is ${order.deliveryStatus}`, ...prev].slice(0, 25));
+    });
+
+    socket.on('delivery:location', (order: Order) => {
+      setOrders(prev => {
+        const exists = prev.some(o => o.id === order.id);
+        return exists ? prev.map(o => o.id === order.id ? order : o) : [order, ...prev];
+      });
+      setActiveTrackingOrder(prev => prev?.id === order.id ? order : prev);
+      setSelectedOrderForInspection(prev => prev?.id === order.id ? order : prev);
+      setNotifications(prev => [`Live location updated for ${order.id}`, ...prev].slice(0, 25));
     });
 
     socket.on('connect_error', (error) => {

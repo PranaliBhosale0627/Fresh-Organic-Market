@@ -151,7 +151,9 @@ export const deliveryPartnersApi = {
   myOrders: () => request('/delivery-partners/me/orders'),
   history: () => request('/delivery-partners/me/history'),
   respond: (orderId, decision) => request(`/delivery-partners/orders/${orderId}/respond`, { method: 'PUT', body: { decision } }),
-  updateDeliveryStatus: (orderId, status, otp) => request(`/delivery-partners/orders/${orderId}/status`, { method: 'PUT', body: { status, otp } })
+  updateDeliveryStatus: (orderId, status, otp) => request(`/delivery-partners/orders/${orderId}/status`, { method: 'PUT', body: { status, otp } }),
+  updateLocation: (orderId, location) => request(`/delivery-partners/orders/${orderId}/location`, { method: 'PUT', body: location }),
+  collectCod: (orderId) => request(`/delivery-partners/orders/${orderId}/cod-collected`, { method: 'PUT' })
 };
 
 // Contact Messages

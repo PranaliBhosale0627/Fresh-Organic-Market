@@ -7,7 +7,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { notifyAdmins, notifyCustomer } from '../services/notificationService.js';
 
 const router = express.Router();
-const DELIVERY_STATUSES = ['Assigned', 'Accepted', 'Picked Up', 'Out for Delivery', 'Reached Destination', 'Delivered', 'Rejected'];
+const DELIVERY_STATUSES = ['Assigned', 'Accepted', 'Picked Up', 'Out for Delivery', 'Near Your Location', 'Delivered', 'Delivery Failed', 'Rejected'];
 const OTP_TTL_MINUTES = 30;
 
 function requireAdmin(req, next) {
@@ -83,9 +83,11 @@ async function updateOrderDeliveryStatus(order, status, changedBy, note, extra =
   ];
 
   const orderStatusPatch = status === 'Delivered'
-    ? { status: 'Delivered', paymentStatus: order.paymentStatus === 'Pending' ? 'Paid' : order.paymentStatus }
+    ? { status: 'Delivered' }
     : status === 'Out for Delivery'
     ? { status: 'Out for Delivery' }
+    : status === 'Delivery Failed'
+    ? { status: 'Cancelled' }
     : {};
 
   const patch = {
@@ -183,7 +185,7 @@ router.get('/analytics/summary', asyncHandler(async (req, res, next) => {
   if (requireAdmin(req, next)) return;
   const partners = await collections().deliveryPartners.find({}).toArray();
   const activeOrders = await collections().orders.countDocuments({
-    deliveryStatus: { $in: ['Assigned', 'Accepted', 'Picked Up', 'Out for Delivery', 'Reached Destination'] }
+    deliveryStatus: { $in: ['Assigned', 'Accepted', 'Picked Up', 'Out for Delivery', 'Near Your Location'] }
   });
   const completedDeliveries = partners.reduce((sum, partner) => sum + (partner.completedDeliveries || 0), 0);
   const avgRating = partners.length
@@ -242,7 +244,7 @@ router.post('/assign', asyncHandler(async (req, res, next) => {
 
   emitToDeliveryPartner(partner.email, 'delivery:assigned', updatedOrder);
   await emitOrderDeliveryUpdate(updatedOrder, 'delivery:assigned');
-  res.json({ success: true, data: updatedOrder, message: 'Order assigned to delivery partner' });
+  res.json({ success: true, data: updatedOrder, message: 'Delivery Partner Assigned Successfully' });
 }));
 
 router.get('/me/profile', asyncHandler(async (req, res, next) => {
@@ -287,6 +289,14 @@ router.put('/orders/:id/respond', asyncHandler(async (req, res, next) => {
 
   const status = decision === 'accept' ? 'Accepted' : 'Rejected';
   const updatedOrder = await updateOrderDeliveryStatus(order, status, req.user.email, `Delivery partner ${status.toLowerCase()} delivery`);
+  if (decision === 'accept') {
+    await notifyCustomer(order.customerEmail, {
+      type: 'delivery.accepted',
+      title: 'Order Accepted',
+      message: 'Your order has been accepted by the delivery partner and is being prepared for delivery.',
+      data: { orderId: order.id }
+    });
+  }
   if (decision === 'reject') {
     await collections().deliveryPartners.updateOne(
       { email: req.user.email },
@@ -295,14 +305,14 @@ router.put('/orders/:id/respond', asyncHandler(async (req, res, next) => {
   }
 
   await emitOrderDeliveryUpdate(updatedOrder, 'delivery:updated');
-  res.json({ success: true, data: updatedOrder });
+  res.json({ success: true, data: updatedOrder, message: decision === 'accept' ? 'Order Accepted Successfully' : 'Order Rejected' });
 }));
 
 router.put('/orders/:id/status', asyncHandler(async (req, res, next) => {
   if (requirePartner(req, next)) return;
   const { status, otp } = req.body;
   if (!DELIVERY_STATUSES.includes(status) || status === 'Assigned' || status === 'Rejected') {
-    return next(new ApiError(`Invalid delivery status. Use one of: Accepted, Picked Up, Out for Delivery, Reached Destination, Delivered`, 400));
+    return next(new ApiError(`Invalid delivery status. Use one of: Accepted, Picked Up, Out for Delivery, Near Your Location, Delivered, Delivery Failed`, 400));
   }
 
   const order = await collections().orders.findOne({ id: req.params.id, 'assignedPartner.email': req.user.email });
@@ -341,15 +351,22 @@ router.put('/orders/:id/status', asyncHandler(async (req, res, next) => {
 
   const updatedOrder = await updateOrderDeliveryStatus(order, status, req.user.email, `Delivery partner marked ${status}`, extra);
 
-  if (status === 'Delivered') {
+  if (status === 'Delivered' || status === 'Delivery Failed') {
     await collections().deliveryPartners.updateOne(
       { email: req.user.email },
       {
-        $inc: { completedDeliveries: 1, activeDeliveries: -1 },
+        $inc: { completedDeliveries: status === 'Delivered' ? 1 : 0, activeDeliveries: -1 },
         $set: { availability: 'Available', updatedAt: new Date().toISOString() }
       }
     );
   }
+
+  await notifyCustomer(order.customerEmail, {
+    type: 'delivery.status',
+    title: 'Delivery Status Updated',
+    message: `Your order ${order.id} is now ${status}.`,
+    data: { orderId: order.id, status }
+  });
 
   await notifyAdmins({
     type: 'delivery.status',
@@ -360,6 +377,62 @@ router.put('/orders/:id/status', asyncHandler(async (req, res, next) => {
 
   await emitOrderDeliveryUpdate(updatedOrder, 'delivery:updated');
   res.json({ success: true, data: updatedOrder });
+}));
+
+router.put('/orders/:id/location', asyncHandler(async (req, res, next) => {
+  if (requirePartner(req, next)) return;
+  const { lat, lng, address, estimatedDeliveryTime } = req.body;
+  if (lat === undefined && lng === undefined && !address) {
+    return next(new ApiError('GPS coordinates or current address is required', 400));
+  }
+
+  const order = await collections().orders.findOne({ id: req.params.id, 'assignedPartner.email': req.user.email });
+  if (!order) return next(new ApiError('Assigned order not found', 404));
+
+  const liveLocation = {
+    ...(lat !== undefined ? { lat: Number(lat) } : {}),
+    ...(lng !== undefined ? { lng: Number(lng) } : {}),
+    ...(address ? { address: String(address).trim() } : {}),
+    updatedAt: new Date().toISOString()
+  };
+
+  const patch = {
+    liveLocation,
+    ...(estimatedDeliveryTime ? { estimatedDeliveryTime } : {}),
+    updatedAt: new Date().toISOString()
+  };
+  await collections().orders.updateOne({ id: order.id }, { $set: patch });
+  const updatedOrder = { ...withoutMongoId(order), ...patch };
+  await emitOrderDeliveryUpdate(updatedOrder, 'delivery:location');
+  res.json({ success: true, data: updatedOrder, message: 'Live delivery location updated' });
+}));
+
+router.put('/orders/:id/cod-collected', asyncHandler(async (req, res, next) => {
+  if (requirePartner(req, next)) return;
+  const order = await collections().orders.findOne({ id: req.params.id, 'assignedPartner.email': req.user.email });
+  if (!order) return next(new ApiError('Assigned order not found', 404));
+  if (!String(order.paymentMethod || '').toLowerCase().includes('cash')) {
+    return next(new ApiError('This order is not Cash on Delivery', 400));
+  }
+  if (order.deliveryStatus !== 'Delivered' && order.status !== 'Delivered') {
+    return next(new ApiError('COD can be marked collected only after delivery', 400));
+  }
+
+  const patch = {
+    paymentStatus: 'Collected',
+    codCollectedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  await collections().orders.updateOne({ id: order.id }, { $set: patch });
+  const updatedOrder = { ...withoutMongoId(order), ...patch };
+  await notifyCustomer(order.customerEmail, {
+    type: 'payment.cod',
+    title: 'COD Payment Collected',
+    message: `Cash on Delivery payment for ${order.id} has been collected.`,
+    data: { orderId: order.id }
+  });
+  await emitOrderDeliveryUpdate(updatedOrder, 'delivery:updated');
+  res.json({ success: true, data: updatedOrder, message: 'COD payment marked as Collected' });
 }));
 
 export default router;

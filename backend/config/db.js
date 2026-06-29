@@ -163,7 +163,11 @@ async function migrateLegacyOrders() {
     db.orders.updateMany({ status: 'Shipped' }, { $set: { status: 'Out for Delivery' } }),
     db.orders.updateMany(
       { deliveryStatus: { $exists: false } },
-      { $set: { deliveryStatus: 'Unassigned', deliveryHistory: [], assignedPartner: null } }
+      { $set: { deliveryStatus: 'Unassigned', deliveryHistory: [], assignedPartner: null, liveLocation: null } }
+    ),
+    db.orders.updateMany(
+      { deliveryStatus: 'Reached Destination' },
+      { $set: { deliveryStatus: 'Near Your Location' } }
     )
   ]);
 }
