@@ -8,6 +8,7 @@
 
 const API_ROOT = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 const BASE_URL = API_ROOT ? `${API_ROOT}/api` : '/api';
+const pathId = (id) => encodeURIComponent(String(id));
 
 // ─── Token Management ─────────────────────────────────────────────────────────
 
@@ -62,13 +63,13 @@ export const productsApi = {
     const qs = new URLSearchParams(params).toString();
     return request(`/products${qs ? `?${qs}` : ''}`);
   },
-  getById: (id) => request(`/products/${id}`),
+  getById: (id) => request(`/products/${pathId(id)}`),
   getCategories: () => request('/products/categories'),
   create: (product) => request('/products', { method: 'POST', body: product }),
-  update: (id, data) => request(`/products/${id}`, { method: 'PUT', body: data }),
-  restock: (id, quantity) => request(`/products/${id}/restock`, { method: 'PUT', body: { quantity } }),
-  updatePrice: (id, price) => request(`/products/${id}/price`, { method: 'PUT', body: { price } }),
-  delete: (id) => request(`/products/${id}`, { method: 'DELETE' })
+  update: (id, data) => request(`/products/${pathId(id)}`, { method: 'PUT', body: data }),
+  restock: (id, quantity) => request(`/products/${pathId(id)}/restock`, { method: 'PUT', body: { quantity } }),
+  updatePrice: (id, price) => request(`/products/${pathId(id)}/price`, { method: 'PUT', body: { price } }),
+  delete: (id) => request(`/products/${pathId(id)}`, { method: 'DELETE' })
 };
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
@@ -78,9 +79,9 @@ export const ordersApi = {
     const qs = new URLSearchParams(params).toString();
     return request(`/orders${qs ? `?${qs}` : ''}`);
   },
-  getById: (id) => request(`/orders/${id}`),
+  getById: (id) => request(`/orders/${pathId(id)}`),
   place: (orderData) => request('/orders', { method: 'POST', body: orderData }),
-  updateStatus: (id, status) => request(`/orders/${id}/status`, { method: 'PUT', body: { status } }),
+  updateStatus: (id, status) => request(`/orders/${pathId(id)}/status`, { method: 'PUT', body: { status } }),
   getStats: () => request('/orders/stats/summary')
 };
 
@@ -91,8 +92,8 @@ export const customersApi = {
     const qs = new URLSearchParams(params).toString();
     return request(`/customers${qs ? `?${qs}` : ''}`);
   },
-  getById: (id) => request(`/customers/${id}`),
-  toggleStatus: (id) => request(`/customers/${id}/toggle-status`, { method: 'PUT' }),
+  getById: (id) => request(`/customers/${pathId(id)}`),
+  toggleStatus: (id) => request(`/customers/${pathId(id)}/toggle-status`, { method: 'PUT' }),
   create: (customer) => request('/customers', { method: 'POST', body: customer })
 };
 
@@ -101,8 +102,8 @@ export const customersApi = {
 export const cartApi = {
   get: () => request('/cart'),
   addItem: (productId, quantity = 1) => request('/cart', { method: 'POST', body: { productId, quantity } }),
-  updateQuantity: (productId, quantity) => request(`/cart/${productId}`, { method: 'PUT', body: { quantity } }),
-  removeItem: (productId) => request(`/cart/${productId}`, { method: 'DELETE' }),
+  updateQuantity: (productId, quantity) => request(`/cart/${pathId(productId)}`, { method: 'PUT', body: { quantity } }),
+  removeItem: (productId) => request(`/cart/${pathId(productId)}`, { method: 'DELETE' }),
   clear: () => request('/cart', { method: 'DELETE' })
 };
 
@@ -110,8 +111,8 @@ export const cartApi = {
 export const wishlistApi = {
   get: () => request('/wishlist'),
   add: (productId) => request('/wishlist', { method: 'POST', body: { productId } }),
-  remove: (productId) => request(`/wishlist/${productId}`, { method: 'DELETE' }),
-  moveToCart: (productId) => request(`/wishlist/${productId}/move-to-cart`, { method: 'POST' })
+  remove: (productId) => request(`/wishlist/${pathId(productId)}`, { method: 'DELETE' }),
+  moveToCart: (productId) => request(`/wishlist/${pathId(productId)}/move-to-cart`, { method: 'POST' })
 };
 
 // ─── Loyalty ──────────────────────────────────────────────────────────────────
@@ -121,8 +122,8 @@ export const loyaltyApi = {
   setCoins: (coins) => request('/loyalty/coins', { method: 'PUT', body: { coins } }),
   addCoins: (amount) => request('/loyalty/coins/add', { method: 'PUT', body: { amount } }),
   spendCoins: (amount) => request('/loyalty/coins/spend', { method: 'PUT', body: { amount } }),
-  completeQuest: (questId) => request(`/loyalty/quests/${questId}/complete`, { method: 'PUT' }),
-  claimQuest: (questId) => request(`/loyalty/quests/${questId}/claim`, { method: 'PUT' }),
+  completeQuest: (questId) => request(`/loyalty/quests/${pathId(questId)}/complete`, { method: 'PUT' }),
+  claimQuest: (questId) => request(`/loyalty/quests/${pathId(questId)}/claim`, { method: 'PUT' }),
   unlockCoupon: (code, cost) => request('/loyalty/coupons', { method: 'POST', body: { code, cost } })
 };
 
@@ -139,8 +140,8 @@ export const deliveryPartnersApi = {
     return request(`/delivery-partners${qs ? `?${qs}` : ''}`);
   },
   create: (partner) => request('/delivery-partners', { method: 'POST', body: partner }),
-  update: (id, partner) => request(`/delivery-partners/${id}`, { method: 'PUT', body: partner }),
-  remove: (id) => request(`/delivery-partners/${id}`, { method: 'DELETE' }),
+  update: (id, partner) => request(`/delivery-partners/${pathId(id)}`, { method: 'PUT', body: partner }),
+  remove: (id) => request(`/delivery-partners/${pathId(id)}`, { method: 'DELETE' }),
   analytics: () => request('/delivery-partners/analytics/summary'),
   assign: (orderId, partnerId, estimatedDeliveryTime) => request('/delivery-partners/assign', {
     method: 'POST',
@@ -150,15 +151,15 @@ export const deliveryPartnersApi = {
   availability: (availability) => request('/delivery-partners/me/availability', { method: 'PUT', body: { availability } }),
   myOrders: () => request('/delivery-partners/me/orders'),
   history: () => request('/delivery-partners/me/history'),
-  respond: (orderId, decision) => request(`/delivery-partners/orders/${orderId}/respond`, { method: 'PUT', body: { decision } }),
-  updateDeliveryStatus: (orderId, status, otp) => request(`/delivery-partners/orders/${orderId}/status`, { method: 'PUT', body: { status, otp } }),
-  updateLocation: (orderId, location) => request(`/delivery-partners/orders/${orderId}/location`, { method: 'PUT', body: location }),
-  collectCod: (orderId) => request(`/delivery-partners/orders/${orderId}/cod-collected`, { method: 'PUT' })
+  respond: (orderId, decision) => request(`/delivery-partners/orders/${pathId(orderId)}/respond`, { method: 'PUT', body: { decision } }),
+  updateDeliveryStatus: (orderId, status, otp) => request(`/delivery-partners/orders/${pathId(orderId)}/status`, { method: 'PUT', body: { status, otp } }),
+  updateLocation: (orderId, location) => request(`/delivery-partners/orders/${pathId(orderId)}/location`, { method: 'PUT', body: location }),
+  collectCod: (orderId) => request(`/delivery-partners/orders/${pathId(orderId)}/cod-collected`, { method: 'PUT' })
 };
 
 // Contact Messages
 export const contactApi = {
   submit: (payload) => request('/contact', { method: 'POST', body: payload }),
   getAll: () => request('/contact'),
-  updateStatus: (id, status) => request(`/contact/${id}/status`, { method: 'PUT', body: { status } })
+  updateStatus: (id, status) => request(`/contact/${pathId(id)}/status`, { method: 'PUT', body: { status } })
 };

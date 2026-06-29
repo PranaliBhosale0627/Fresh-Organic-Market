@@ -59,6 +59,7 @@ interface ProfileViewProps {
   products?: Product[];
   notifications?: string[];
   onNavigate?: (view: string) => void;
+  onTrackOrder?: (order: Order) => void;
   wishlistItems?: Product[];
   onRemoveWishlistItem?: (productId: string) => void;
   onMoveWishlistToCart?: (productId: string) => void;
@@ -108,6 +109,7 @@ export default function ProfileView({
   products = [],
   notifications = [],
   onNavigate,
+  onTrackOrder,
   wishlistItems = [],
   onRemoveWishlistItem,
   onMoveWishlistToCart,
@@ -289,7 +291,7 @@ export default function ProfileView({
             </div>
             <div className="space-y-3">
               {customerOrders.slice(0, 3).map((order) => (
-                <OrderRow key={order.id} order={order} onDownloadInvoice={handleDownloadInvoice} />
+                <OrderRow key={order.id} order={order} onDownloadInvoice={handleDownloadInvoice} onTrackOrder={onTrackOrder} />
               ))}
               {customerOrders.length === 0 && <EmptyState icon={ShoppingBag} title="No orders yet" text="Your MongoDB-backed orders will appear here after checkout." />}
             </div>
@@ -333,7 +335,7 @@ export default function ProfileView({
           <h2 className="mb-5 text-lg font-black text-primary">My Orders & Invoices</h2>
           <div className="space-y-3">
             {customerOrders.map((order) => (
-              <OrderRow key={order.id} order={order} onDownloadInvoice={handleDownloadInvoice} expanded />
+              <OrderRow key={order.id} order={order} onDownloadInvoice={handleDownloadInvoice} onTrackOrder={onTrackOrder} expanded />
             ))}
             {customerOrders.length === 0 && <EmptyState icon={ShoppingBag} title="No orders yet" text="Checkout orders are saved in MongoDB and will show here." />}
           </div>
@@ -484,10 +486,12 @@ export default function ProfileView({
 function OrderRow({
   order,
   onDownloadInvoice,
+  onTrackOrder,
   expanded = false,
 }: {
   order: Order;
   onDownloadInvoice: (order: Order) => void;
+  onTrackOrder?: (order: Order) => void;
   expanded?: boolean;
 }) {
   return (
@@ -504,6 +508,9 @@ function OrderRow({
           <span className="text-sm font-black text-on-surface">{currency.format(order.total)}</span>
           <button onClick={() => onDownloadInvoice(order)} className="rounded-full bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-primary shadow-sm">
             <Download className="mr-1 inline h-3.5 w-3.5" /> Invoice
+          </button>
+          <button onClick={() => onTrackOrder?.(order)} className="rounded-full bg-primary px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white shadow-sm">
+            Track Order
           </button>
         </div>
       </div>

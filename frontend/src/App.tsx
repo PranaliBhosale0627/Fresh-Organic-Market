@@ -569,6 +569,11 @@ export default function App() {
     setCurrentView('admin-orders');
   };
 
+  const handleTrackOrderFromProfile = (order: Order) => {
+    setActiveTrackingOrder(order);
+    setCurrentView('order-tracking');
+  };
+
   // ─── Computed Metrics ─────────────────────────────────────────────────────
   const cartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
   const cartTotal = cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
@@ -693,6 +698,7 @@ export default function App() {
                     products={products}
                     notifications={notifications}
                     onNavigate={handleNavigate}
+                    onTrackOrder={handleTrackOrderFromProfile}
                     wishlistItems={wishlistItems}
                     onRemoveWishlistItem={(productId) => {
                       const product = wishlistItems.find(item => item.id === productId);
